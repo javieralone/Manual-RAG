@@ -1,29 +1,60 @@
 version: '3.8'
 
 services:
+  # 1. Base de datos vectorial
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant_rag
+    container_name: rag_qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
       - ./qdrant_storage:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama_rag
+  # 2. Microservicio Motor RAG (Python)
+  rag-engine:
+    build:
+      context: ./rag-engine
+      dockerfile: Dockerfile
+    container_name: rag_python_engine
     ports:
-      - "11434:11434"
+      - "8000:8000"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OMP_NUM_THREADS=2      # Limita hilos de CPU para no saturar los 4 núcleos
+      - MKL_NUM_THREADS=2
     volumes:
-      - ./ollama_data:/root/.ollama
+      - ./documents:/app/documents
+      - ./output:/app/output
+    deploy:
+      resources:
+        limits:
+          memory: 2.5g
+    depends_on:
+      - qdrant
+    restart: unless-stopped
 
+  # 3. API Gateway en Go
   api-go:
     build:
       context: ./api-go
-    container_name: go_api_gateway
+      dockerfile: Dockerfile
+    container_name: rag_go_api
     ports:
       - "8080:8080"
+    environment:
+      - PYTHON_ENGINE_URL=http://rag-engine:8000
+      - OLLAMA_URL=http://host.docker.internal:11434
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
-      - qdrant
-      - ollama
+      - rag-engine
+    restart: unless-stopped

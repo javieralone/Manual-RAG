@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
-# Instalar dependencias del sistema para Tesseract y Poppler
-RUN apt-get update && apt-get install -y \
+# Instalar solo las librerías esenciales del sistema y limpiar en el mismo layer
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-spa \
     poppler-utils \
@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY requirements.txt .
+
+# Instalar PyTorch CPU sin guardar archivos .whl temporales
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

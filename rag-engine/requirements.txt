@@ -1,8 +1,5 @@
+transformers
 sentence-transformers
 qdrant-client
-mcp[cli]
-ollama
-langchain-text-splitters
-pytesseract
-pdf2image
-Pillow
+fastapi
+uvicorn
