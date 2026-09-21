@@ -154,18 +154,3 @@ go build -v ./...
 ```
 
 ---
-
-## 🚦 Próximos Pasos
-
-### Refactor de `rag-engine`
-
-Aplicar interfaces abstractas (ABC), inversión de dependencias e inyección de dependencias para alinear completamente la arquitectura de Python con los principios ya presentes en el API Gateway.
-
-### Validación End-to-End
-
-Levantar el stack completo mediante Docker Compose y validar el flujo completo desde Postman:
-
-1. Consultar `/health`.
-2. Ejecutar peticiones a `/api/v1/query`.
-3. Verificar recuperación de contexto desde `rag-engine`.
-4. Confirmar generación de respuestas desde Ollama.
