@@ -44,15 +44,14 @@ FastAPIInstrumentor.instrument_app(app)
 
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
-    trace_id = request.headers.get("traceparent", "")
+    span_context = trace.get_current_span().get_span_context()
+    trace_id = format(span_context.trace_id, "032x") if span_context.is_valid else ""
     trace_id_context.set(trace_id)
     started = time.perf_counter()
     response = await call_next(request)
     path = request.url.path
     http_requests_total.labels(request.method, path, str(response.status_code)).inc()
     http_request_duration.labels(request.method, path).observe(time.perf_counter() - started)
-    if trace_id:
-        response.headers["traceparent"] = trace_id
     return response
 
 @app.get("/health")

@@ -64,7 +64,7 @@ Limita las peticiones concurrentes utilizando un canal con búfer para evitar so
 
 ### Context Cancellation & Timeout Middleware
 
-Toda petición HTTP propaga un `context.Context` con un límite estricto de **60 segundos**.
+Toda petición HTTP propaga un `context.Context` con un límite configurable de **5 minutos** por defecto.
 
 Si el cliente cancela la solicitud o expira el tiempo establecido:
 
@@ -150,7 +150,7 @@ Configura estas variables en el entorno del contenedor `api-go` o en un archivo 
 | `AUTH_ADMIN_PASSWORD_HASH` | Hash bcrypt del password del usuario inicial |
 | `AUTH_ADMIN_ROLES` | Roles separados por coma: `admin`, `operator`, `user` |
 
-Opcionales: `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ACCESS_TTL` (por defecto `15m`), `AUTH_REFRESH_TTL` (por defecto `168h`), `OLLAMA_MODEL` y `WORKER_LIMIT`.
+Opcionales: `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ACCESS_TTL` (por defecto `15m`), `AUTH_REFRESH_TTL` (por defecto `168h`), `OLLAMA_MODEL`, `WORKER_LIMIT`, `HTTP_CLIENT_TIMEOUT` y `REQUEST_TIMEOUT` (por defecto `5m`) y `READINESS_INTERVAL` (por defecto `15s`).
 
 Genera el hash con una herramienta bcrypt confiable, por ejemplo `htpasswd -bnBC 12 "" "tu-password"` y conserva solo el valor despues de los dos puntos. Nunca guardes el password ni los secretos en Git.
 

@@ -535,6 +535,7 @@ El sistema incluye observabilidad end-to-end:
 - `/health`, `/ready` y `/metrics` en `api-go` y `rag-engine`.
 - Métricas Prometheus de tráfico, latencias, errores, autenticación, concurrencia, retrieval, embeddings, Qdrant y Ollama.
 - Logs JSON en Go y Python.
+- Promtail recoge los logs Docker y los envía a Loki con labels estables (`service`, `container`, `project`, `environment`, `level`).
 - Trazas OpenTelemetry OTLP con destino Tempo y propagación W3C entre gateway, RAG engine y Ollama.
 - Stack Docker Compose con Prometheus, Grafana, Loki y Tempo.
 - Dashboard provisionado en `observability/grafana/dashboards/`.

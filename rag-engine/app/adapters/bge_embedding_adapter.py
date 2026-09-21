@@ -3,6 +3,7 @@ from typing import List
 from app.observability import embedding_duration
 from sentence_transformers import SentenceTransformer
 from app.core.ports.embedding_port import EmbeddingPort
+from opentelemetry import trace
 
 class BGEEmbeddingAdapter(EmbeddingPort):
     def __init__(self, model_name: str = "BAAI/bge-m3"):
@@ -12,7 +13,9 @@ class BGEEmbeddingAdapter(EmbeddingPort):
 
     def generate_embedding(self, text: str) -> List[float]:
         started = time.perf_counter()
-        try:
-            return self._model.encode(text).tolist()
-        finally:
-            embedding_duration.observe(time.perf_counter() - started)
+        tracer = trace.get_tracer("manual-rag/rag-engine")
+        with tracer.start_as_current_span("embeddings.generate"):
+            try:
+                return self._model.encode(text).tolist()
+            finally:
+                embedding_duration.observe(time.perf_counter() - started)

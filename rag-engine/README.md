@@ -140,6 +140,13 @@ GET /health
 }
 ```
 
+## Readiness y métricas
+
+- `GET /ready`: verifica que Qdrant y el modelo de embeddings están disponibles.
+- `GET /metrics`: expone métricas Prometheus de HTTP, embeddings, retrieval y Qdrant.
+
+El servicio escribe logs JSON en stdout y propaga el contexto W3C `traceparent`. Las trazas se exportan a Tempo cuando `OTEL_EXPORTER_OTLP_ENDPOINT` está configurado.
+
 ---
 
 ## Búsqueda Vectorial

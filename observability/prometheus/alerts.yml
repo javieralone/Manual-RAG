@@ -36,3 +36,24 @@ groups:
           severity: critical
         annotations:
           summary: Qdrant requests are failing
+      - alert: ManualRAGServiceNotReady
+        expr: api_go_readiness == 0 or rag_engine_readiness == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Manual-RAG service is not ready
+      - alert: ManualRAGWorkerPoolSaturated
+        expr: api_go_worker_pool_rejections_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API Gateway worker pool is rejecting requests
+      - alert: ManualRAGPrometheusScrapeFailure
+        expr: up{job=~"api-go|rag-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus cannot scrape an application target

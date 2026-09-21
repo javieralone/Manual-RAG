@@ -10,6 +10,7 @@ import (
 
 	"api-go/internal/adapters/observability"
 	"api-go/internal/core/domain"
+	"go.opentelemetry.io/otel"
 )
 
 type pythonSearchRequest struct {
@@ -36,6 +37,8 @@ func NewPythonRAGClient(baseURL string, httpClient *http.Client, metrics *observ
 }
 
 func (c *PythonRAGClient) RetrieveContext(ctx context.Context, query string, topK int) ([]domain.DocumentChunk, error) {
+	ctx, span := otel.Tracer("manual-rag/api-go").Start(ctx, "rag-engine /search")
+	defer span.End()
 	reqBody, err := json.Marshal(pythonSearchRequest{
 		Query: query,
 		TopK:  topK,

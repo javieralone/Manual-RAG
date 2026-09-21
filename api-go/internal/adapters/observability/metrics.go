@@ -44,7 +44,7 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 		DependencyTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "api_go_dependency_requests_total", Help: "Requests to downstream dependencies."}, []string{"dependency", "result"}),
 		DependencyDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "api_go_dependency_duration_seconds", Help: "Downstream dependency latency."}, []string{"dependency"}),
 		GenerationDuration: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "api_go_generation_duration_seconds", Help: "Ollama generation duration in seconds."}),
-		GeneratedTokens:    prometheus.NewHistogram(prometheus.HistogramOpts{Name: "api_go_generated_tokens_total", Help: "Tokens reported by Ollama per generation."}),
+		GeneratedTokens:    prometheus.NewHistogram(prometheus.HistogramOpts{Name: "api_go_generated_tokens", Help: "Tokens reported by Ollama per generation."}),
 		TimeToFirstToken:   prometheus.NewHistogram(prometheus.HistogramOpts{Name: "api_go_time_to_first_token_seconds", Help: "Time to first token; completion time for non-streaming Ollama."}),
 		ErrorsTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "api_go_errors_total", Help: "Classified gateway errors."}, []string{"component", "kind"}),
 		WorkerInFlight:     prometheus.NewGauge(prometheus.GaugeOpts{Name: "api_go_worker_pool_in_flight", Help: "Queries currently using a worker."}),
@@ -52,6 +52,7 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 		Readiness:          prometheus.NewGauge(prometheus.GaugeOpts{Name: "api_go_readiness", Help: "Gateway readiness: 1 ready, 0 not ready."}),
 	}
 	registerer.MustRegister(m.RequestsTotal, m.RequestDuration, m.AuthTotal, m.DependencyTotal, m.DependencyDuration, m.GenerationDuration, m.GeneratedTokens, m.TimeToFirstToken, m.ErrorsTotal, m.WorkerInFlight, m.WorkerRejections, m.Readiness)
+	m.Readiness.Set(0)
 	return m
 }
 

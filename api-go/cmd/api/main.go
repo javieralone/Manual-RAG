@@ -70,14 +70,17 @@ func main() {
 		clients.NewURLHealthChecker(strings.TrimRight(config.PythonEngineURL, "/")+"/health", httpClient),
 		clients.NewURLHealthChecker(strings.TrimRight(config.OllamaURL, "/")+"/api/tags", httpClient),
 	)
+	readinessContext, cancelReadiness := context.WithCancel(context.Background())
+	defer cancelReadiness()
+	healthHandler.StartReadinessMonitor(readinessContext, config.ReadinessInterval)
 
-	// 5. Router con Middleware de Timeout (Límite global de 60s por Request)
+	// 5. Router con Middleware de Timeout
 	authenticate := middlewares.AuthenticationMiddleware(tokenService)
 	authorize := middlewares.RequireAnyRole(domain.RoleAdmin, domain.RoleOperator, domain.RoleUser)
 	router := adaptersHTTP.NewRouter(queryHandler, authHandler, healthHandler, authenticate, authorize)
 	handlerWithMiddleware := middlewares.TraceMiddleware(middlewares.MetricsMiddleware(metrics)(middlewares.TimeoutMiddleware(config.RequestTimeout)(router)))
 
-	logger.Info("api_gateway_started", "port", config.HTTPPort, "worker_limit", config.WorkerLimit)
+	logger.Info("api_gateway_started", "port", config.HTTPPort, "worker_limit", config.WorkerLimit, "readiness_interval", config.ReadinessInterval.String())
 	if err := http.ListenAndServe(config.HTTPPort, handlerWithMiddleware); err != nil {
 		log.Fatalf("Error iniciando servidor: %v", err)
 	}

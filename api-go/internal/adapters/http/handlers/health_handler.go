@@ -29,19 +29,48 @@ func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
 func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
+	if !h.UpdateReadiness(ctx) {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "NOT_READY"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "READY"})
+}
+
+func (h *HealthHandler) UpdateReadiness(ctx context.Context) bool {
+	ready := true
 	for _, check := range h.checks {
 		if err := check.Check(ctx); err != nil {
-			if h.metrics != nil {
-				h.metrics.Readiness.Set(0)
-			}
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "NOT_READY"})
-			return
+			ready = false
+			break
 		}
 	}
 	if h.metrics != nil {
-		h.metrics.Readiness.Set(1)
+		if ready {
+			h.metrics.Readiness.Set(1)
+		} else {
+			h.metrics.Readiness.Set(0)
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "READY"})
+	return ready
+}
+
+func (h *HealthHandler) StartReadinessMonitor(ctx context.Context, interval time.Duration) {
+	go func() {
+		readinessTicker := time.NewTicker(interval)
+		defer readinessTicker.Stop()
+
+		for {
+			checkContext, cancel := context.WithTimeout(ctx, 3*time.Second)
+			h.UpdateReadiness(checkContext)
+			cancel()
+
+			select {
+			case <-readinessTicker.C:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func writeJSON(w http.ResponseWriter, status int, value interface{}) {

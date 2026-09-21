@@ -12,9 +12,11 @@ import (
 )
 
 func InitTracer(ctx context.Context, endpoint string) (func(context.Context) error, error) {
-	if strings.TrimSpace(endpoint) == "" {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
 		return func(context.Context) error { return nil }, nil
 	}
+	endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
 	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithInsecure())
 	if err != nil {
 		return nil, err

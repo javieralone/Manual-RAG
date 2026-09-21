@@ -18,6 +18,7 @@ type Config struct {
 	HTTPPort          string
 	HTTPClientTimeout time.Duration
 	RequestTimeout    time.Duration
+	ReadinessInterval time.Duration
 	WorkerLimit       int
 	OTLPEndpoint      string
 	Auth              AuthConfig
@@ -65,6 +66,18 @@ func Load() (Config, error) {
 	if err != nil || workerLimit < 1 {
 		return Config{}, errors.New("WORKER_LIMIT debe ser un entero positivo")
 	}
+	httpClientTimeout, err := durationEnv("HTTP_CLIENT_TIMEOUT", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	requestTimeout, err := durationEnv("REQUEST_TIMEOUT", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	readinessInterval, err := durationEnv("READINESS_INTERVAL", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 
 	roles, err := parseRoles(os.Getenv("AUTH_ADMIN_ROLES"))
 	if err != nil {
@@ -76,8 +89,9 @@ func Load() (Config, error) {
 		OllamaURL:         envOrDefault("OLLAMA_URL", "http://host.docker.internal:11434"),
 		OllamaModel:       envOrDefault("OLLAMA_MODEL", "qwen2.5:1.5b"),
 		HTTPPort:          envOrDefault("HTTP_PORT", ":8080"),
-		HTTPClientTimeout: 30 * time.Second,
-		RequestTimeout:    60 * time.Second,
+		HTTPClientTimeout: httpClientTimeout,
+		RequestTimeout:    requestTimeout,
+		ReadinessInterval: readinessInterval,
 		WorkerLimit:       workerLimit,
 		OTLPEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Auth: AuthConfig{

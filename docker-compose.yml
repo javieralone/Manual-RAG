@@ -106,6 +106,9 @@ services:
       - AUTH_ADMIN_PASSWORD_HASH=${AUTH_ADMIN_PASSWORD_HASH:?AUTH_ADMIN_PASSWORD_HASH must be set}
       - AUTH_ADMIN_ROLES=${AUTH_ADMIN_ROLES:-admin}
       - WORKER_LIMIT=${WORKER_LIMIT:-2}
+      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-5m}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-5m}
+      - READINESS_INTERVAL=${READINESS_INTERVAL:-15s}
       - OTEL_SERVICE_NAME=api-go
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     extra_hosts:
@@ -165,6 +168,19 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
 
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: rag_promtail
+    volumes:
+      - ./observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail_positions:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
   tempo:
     image: grafana/tempo:2.6.1
     container_name: rag_tempo
@@ -184,3 +200,4 @@ volumes:
   grafana_data:
   loki_data:
   tempo_data:
+  promtail_positions:

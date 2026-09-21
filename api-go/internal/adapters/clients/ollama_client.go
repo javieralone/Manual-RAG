@@ -11,6 +11,7 @@ import (
 
 	"api-go/internal/adapters/observability"
 	"api-go/internal/core/domain"
+	"go.opentelemetry.io/otel"
 )
 
 type OllamaClient struct {
@@ -42,6 +43,8 @@ type ollamaResponse struct {
 }
 
 func (c *OllamaClient) GenerateAnswer(ctx context.Context, question string, chunks []domain.DocumentChunk) (string, error) {
+	ctx, span := otel.Tracer("manual-rag/api-go").Start(ctx, "ollama /api/generate")
+	defer span.End()
 	// 1. Construir el prompt inyectando el contexto RAG
 	var contextBuilder strings.Builder
 	for i, chunk := range chunks {

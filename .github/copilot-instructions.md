@@ -28,3 +28,4 @@
 - Use `python-rag-specialist` for embeddings, Qdrant, FastAPI, MCP, ingestion, and Python domain code.
 - Use `integration-reviewer` for Docker Compose, cross-service contracts, runtime checks, and code review.
 - Use `rag-system-architect` when a request spans more than one service or needs sequencing.
+- Use the `observability-stack` skill for Prometheus, Grafana, Loki/Promtail, Tempo/OpenTelemetry, alerts, health/readiness, and trace-to-log work.
