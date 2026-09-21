@@ -1,12 +1,12 @@
 # 🚀 Go API Gateway — RAG System
 
-Un API Gateway resiliente y concurrente desarrollado en **Go**, diseñado bajo los principios de **Clean Architecture** y **SOLID**. Actúa como el punto de entrada orquestador entre los clientes externos, el motor de búsqueda vectorial (`rag-engine` en Python) y el LLM (`Ollama`).
+Un API Gateway resiliente y concurrente desarrollado en **Go**, diseñado bajo los principios de **Clean Architecture** y **SOLID**. Actúa como el punto de entrada orquestador entre los clientes externos, el motor de búsqueda vectorial (**rag-engine** en Python) y el LLM (**Ollama**).
 
 ---
 
 ## 🏗️ Arquitectura y Diseño
 
-El proyecto sigue una arquitectura hexagonal / **Clean Architecture** dividida en capas concéntricas, garantizando la inversión de dependencias y el desacoplamiento total de marcos de trabajo o infraestructura externa.
+El proyecto sigue una arquitectura hexagonal o **Clean Architecture** dividida en capas concéntricas, garantizando la inversión de dependencias y el desacoplamiento total de frameworks o infraestructura externa.
 
 ```text
 api-go/
@@ -30,36 +30,75 @@ api-go/
         │   └── router.go
         ├── clients/                 # Adaptadores de salida (Python / Ollama)
         └── decorators/              # Decoradores para concurrencia (Worker Pool)
+```
 
-🧩 Principios SOLID y Patrones Aplicados
-Single Responsibility (SRP): Cada paquete tiene una responsabilidad acotada. El QueryHandler gestiona el protocolo HTTP, el WorkerPoolUseCaseDecorator maneja los límites de recursos y el QueryOrchestrator contiene la lógica pura de la consulta.
+## 🧩 Principios SOLID y Patrones Aplicados
 
-Dependency Inversion (DIP): El núcleo (core) no depende de implementaciones concretas. Define contratos en ports/ que son implementados por la capa de adapters/.
+### Single Responsibility Principle (SRP)
 
-Open/Closed (OCP) & Patrón Decorator: La limitación de concurrencia se implementa envolviendo el caso de uso principal con WorkerPoolUseCaseDecorator sin alterar el código del orquestador.
+Cada paquete tiene una responsabilidad acotada:
 
-Graceful Degradation & Protection: Diseñado para ejecutarse de forma segura en entornos con restricciones de memoria y CPU.
+- `QueryHandler` gestiona el protocolo HTTP.
+- `WorkerPoolUseCaseDecorator` maneja los límites de recursos.
+- `QueryOrchestrator` contiene la lógica de negocio y orquestación de consultas.
 
-⚡ Concurrencia y Control de Recursos
-Worker Pool (Semáforo por Canales): Limita las peticiones concurrentes mediante un canal con búfer para prevenir sobrecargas de RAM/CPU por consultas simultáneas hacia Ollama.
+### Dependency Inversion Principle (DIP)
 
-Context Cancellation & Timeout Middleware: Toda petición HTTP propaga un context.Context con un límite estricto de tiempo (60s). Si el cliente cancela la consulta o expira el tiempo, los sockets HTTP se cierran inmediatamente evitando fugas de memoria (goroutine leaks).
+El núcleo (`core`) no depende de implementaciones concretas. Define contratos en `ports/` que son implementados por la capa `adapters/`.
 
-Reutilización de HTTP Client: Instancia única de http.Client con soporte para Keep-Alive y reutilización de conexiones TCP.
+### Open/Closed Principle (OCP) y Patrón Decorator
 
-🔌 Endpoints
-POST /api/v1/query
-Procesa la pregunta del usuario, recupera el contexto desde rag-engine y genera la respuesta con Ollama.
+La limitación de concurrencia se implementa envolviendo el caso de uso principal mediante `WorkerPoolUseCaseDecorator`, sin modificar el código del orquestador.
 
-Request Body:
+### Graceful Degradation & Protection
 
-JSON
+Diseñado para ejecutarse de forma segura en entornos con recursos limitados de CPU y memoria.
+
+---
+
+## ⚡ Concurrencia y Control de Recursos
+
+### Worker Pool (Semáforo mediante canales)
+
+Limita las peticiones concurrentes utilizando un canal con búfer para evitar sobrecargas de RAM y CPU causadas por consultas simultáneas hacia Ollama.
+
+### Context Cancellation & Timeout Middleware
+
+Toda petición HTTP propaga un `context.Context` con un límite estricto de **60 segundos**.
+
+Si el cliente cancela la solicitud o expira el tiempo establecido:
+
+- Los sockets HTTP se cierran inmediatamente.
+- Se interrumpen las operaciones pendientes.
+- Se evitan fugas de memoria (*goroutine leaks*).
+
+### Reutilización de HTTP Client
+
+Instancia única de `http.Client` con soporte para:
+
+- Keep-Alive.
+- Reutilización de conexiones TCP.
+- Menor latencia y consumo de recursos.
+
+---
+
+## 🔌 Endpoints
+
+### POST `/api/v1/query`
+
+Procesa la pregunta del usuario, recupera contexto desde `rag-engine` y genera una respuesta utilizando Ollama.
+
+#### Request Body
+
+```json
 {
   "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
 }
-Response Body (200 OK):
+```
 
-JSON
+#### Response Body (200 OK)
+
+```json
 {
   "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
   "answer": "El mantenimiento requiere revisar los niveles de aceite...",
@@ -71,33 +110,62 @@ JSON
     }
   ]
 }
-GET /health
-Verificación de estado para Docker / Orquestadores.
+```
 
-Response Body (200 OK):
+---
 
-JSON
+### GET `/health`
+
+Endpoint de verificación de estado destinado a Docker y orquestadores.
+
+#### Response Body (200 OK)
+
+```json
 {
   "status": "UP"
 }
-🛠️ Compilación y Ejecución
-Requisitos
-Docker & Docker Compose
+```
 
-Go 1.22+ (Opcional, si deseas compilar de forma local)
+---
 
-Ejecutar con Docker Compose
-Desde la raíz del proyecto global:
+## 🛠️ Compilación y Ejecución
 
-Bash
+### Requisitos
+
+- Docker
+- Docker Compose
+- Go 1.22+ (opcional, para compilación local)
+
+### Ejecutar con Docker Compose
+
+Desde la raíz del proyecto:
+
+```bash
 docker compose up -d --build api-go
-Probar compilación localmente
-Bash
+```
+
+### Probar compilación local
+
+```bash
 cd api-go
+
 go mod tidy
 go build -v ./...
+```
 
-<ElicitationsGroup message="¿Cómo quieres continuar con el proyecto?">
-  <Elicitation label="Comenzar refactor de rag-engine" query="Muéstrame cómo aplicar interfaces abstractas (ABC) e inyección de dependencias en rag-engine con Python."/>
-  <Elicitation label="Probar flujo completo en Postman" query="Ejecutaré el docker compose up y la prueba desde Postman para confirmar que todo funciona correctamente."/>
-</ElicitationsGroup>
+---
+
+## 🚦 Próximos Pasos
+
+### Refactor de `rag-engine`
+
+Aplicar interfaces abstractas (ABC), inversión de dependencias e inyección de dependencias para alinear completamente la arquitectura de Python con los principios ya presentes en el API Gateway.
+
+### Validación End-to-End
+
+Levantar el stack completo mediante Docker Compose y validar el flujo completo desde Postman:
+
+1. Consultar `/health`.
+2. Ejecutar peticiones a `/api/v1/query`.
+3. Verificar recuperación de contexto desde `rag-engine`.
+4. Confirmar generación de respuestas desde Ollama.
