@@ -3,4 +3,4 @@ sentence-transformers
 qdrant-client
 fastapi
 uvicorn
-mcp
+mcp<2

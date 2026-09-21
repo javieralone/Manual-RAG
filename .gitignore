@@ -2,4 +2,5 @@
 /output
 /venv
 /documents
-/__pycache__
+__pycache__/
+*.pyc
