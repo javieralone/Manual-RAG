@@ -31,7 +31,7 @@ func main() {
 
 	// 5. Router con Middleware de Timeout (Límite global de 60s por Request)
 	router := adaptersHTTP.NewRouter(queryHandler)
-	handlerWithMiddleware := middlewares.TimeoutMiddleware(60 * time.Second)(router)
+	handlerWithMiddleware := middlewares.TimeoutMiddleware(60000 * time.Second)(router)
 
 	log.Println("API Gateway corriendo con WorkerPool y Middleware de Contexto...")
 	if err := http.ListenAndServe(":8080", handlerWithMiddleware); err != nil {

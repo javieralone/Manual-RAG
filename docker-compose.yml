@@ -23,11 +23,13 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - HF_HOME=/app/.cache/huggingface  # Redirige la caché de HuggingFace
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - OMP_NUM_THREADS=2      # Limita hilos de CPU para no saturar los 4 núcleos
       - MKL_NUM_THREADS=2
     volumes:
+      - huggingface_cache:/app/.cache/huggingface  # Guarda el modelo en el volumen
       - ./documents:/app/documents
       - ./output:/app/output
     deploy:
@@ -58,3 +60,6 @@ services:
     depends_on:
       - rag-engine
     restart: unless-stopped
+
+volumes:
+  huggingface_cache:

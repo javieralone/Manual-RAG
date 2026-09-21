@@ -1,45 +1,48 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import os
+from fastapi import FastAPI, HTTPException, status, Depends
 from app.core.domain.schemas import SearchQuery, SearchResponse
-from app.core.ports.embedding_port import EmbeddingPort
-from app.core.ports.vector_store_port import VectorStorePort
-from app.adapters.sentence_transformer_adapter import SentenceTransformerAdapter
+from app.adapters.bge_embedding_adapter import BGEEmbeddingAdapter
 from app.adapters.qdrant_adapter import QdrantAdapter
 from app.services.rag_service import RAGService
 
-app = FastAPI(title="RAG Engine Python", version="1.0.0")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
+COLLECTION_NAME = "manuales_tecnicos"
 
-# --- CONTENEDORES DE DEPENDENCIAS (Singletons para evitar recargar el modelo en RAM) ---
-_embedding_adapter = SentenceTransformerAdapter(model_name="paraphrase-multilingual-MiniLM-L12-v2")
-_vector_store_adapter = QdrantAdapter(
-    host="qdrant", 
-    port=6333, 
-    collection_name="manuales_tecnicos"
-)
+# --- COMPOSITION ROOT (Singletons) ---
+embedding_adapter = BGEEmbeddingAdapter(model_name="BAAI/bge-m3")
+qdrant_adapter = QdrantAdapter(host=QDRANT_HOST, port=QDRANT_PORT, collection_name=COLLECTION_NAME)
+rag_service_instance = RAGService(embedding_provider=embedding_adapter, vector_store=qdrant_adapter)
 
 def get_rag_service() -> RAGService:
-    return RAGService(
-        embedding_provider=_embedding_adapter,
-        vector_store=_vector_store_adapter
-    )
+    return rag_service_instance
 
-# --- ENDPOINTS ---
-@app.post("/search", response_model=SearchResponse, status_code=status.HTTP_200_OK)
-def search(
-    payload: SearchQuery, 
+app = FastAPI(
+    title="RAG Engine Internal API",
+    description="Servicio interno en Python para embeddings y búsqueda vectorial.",
+    version="1.0.0"
+)
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "engine": "RAG Python FastAPI Clean Arch"}
+
+@app.post("/search", response_model=SearchResponse)
+def search_chunks(
+    request: SearchQuery, 
     rag_service: RAGService = Depends(get_rag_service)
 ):
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="La consulta 'query' no puede estar vacía.")
+
     try:
-        results = rag_service.retrieve_relevant_chunks(
-            query_text=payload.query, 
-            top_k=payload.top_k
-        )
-        return SearchResponse(results=results)
+        return rag_service.execute_search(query_text=request.query, top_k=request.top_k)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en la búsqueda vectorial: {str(e)}"
+            detail=f"Error en el motor RAG: {str(e)}"
         )
 
-@app.get("/health")
-def health():
-    return {"status": "UP"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
