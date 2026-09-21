@@ -120,6 +120,8 @@ Por ejemplo, el adaptador de embeddings implementa el contrato definido por `Emb
 
 El API Gateway utiliza un mecanismo de control de concurrencia para evitar que demasiadas consultas simultáneas saturen la memoria o el procesador.
 
+Además, las rutas de consulta aplican rate limiting independiente por IP y usuario autenticado. Los límites se configuran con `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW`; una petición que supera la cuota recibe `429 Too Many Requests`. Este estado es local a cada instancia del gateway.
+
 ### Cancelación y timeout
 
 Las peticiones HTTP utilizan contextos con timeout para evitar conexiones bloqueadas y liberar recursos cuando el cliente cancela una solicitud.
@@ -467,6 +469,9 @@ AUTH_REFRESH_SECRET=<secreto>
 AUTH_ADMIN_USERNAME=admin
 AUTH_ADMIN_PASSWORD_HASH=<hash-bcrypt>
 WORKER_LIMIT=2
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=60
+RATE_LIMIT_WINDOW=1m
 HTTP_CLIENT_TIMEOUT=5m
 REQUEST_TIMEOUT=5m
 ```
@@ -475,13 +480,14 @@ El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, la colección `manual
 
 No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
-Para desarrollo local puedes utilizar un archivo `.env`:
+Para desarrollo local copia `.env.example` a `.env.local`, completa los secretos y usa ese archivo explícitamente con Docker Compose:
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env.local
+docker compose --env-file .env.local up -d --build
 ```
 
-Si el proyecto no incluye `.env.example`, crea el archivo `.env` siguiendo las variables definidas en `docker-compose.yml`.
+`.env.example` es apto para versionar; `.env.local` y `.env` están ignorados porque pueden contener secretos. Si ya usas `.env`, puedes continuar con `docker compose up`; para el archivo local separado debes indicar siempre `--env-file .env.local`.
 
 ### Puertos
 

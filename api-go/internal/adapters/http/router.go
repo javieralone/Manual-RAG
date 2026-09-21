@@ -8,14 +8,14 @@ import (
 )
 
 // NewRouter configura y devuelve el enrutador HTTP con sus middlewares y rutas
-func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHandler, healthHandler *handlers.HealthHandler, authenticate func(http.Handler) http.Handler, authorize func(http.Handler) http.Handler) http.Handler {
+func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHandler, healthHandler *handlers.HealthHandler, authenticate func(http.Handler) http.Handler, authorize func(http.Handler) http.Handler, rateLimit func(http.Handler) http.Handler) http.Handler {
 	mux := http.NewServeMux()
 
 	// Registro de endpoints
-	protectedQuery := authenticate(authorize(http.HandlerFunc(queryHandler.HandleQuery)))
+	protectedQuery := authenticate(authorize(rateLimit(http.HandlerFunc(queryHandler.HandleQuery))))
 	mux.Handle("/api/v1/query", protectedQuery)
 
-	protectedQueryStream := authenticate(authorize(http.HandlerFunc(queryHandler.HandleQueryStream)))
+	protectedQueryStream := authenticate(authorize(rateLimit(http.HandlerFunc(queryHandler.HandleQueryStream))))
 	mux.Handle("/query/stream", protectedQueryStream)
 
 	mux.HandleFunc("/api/v1/auth/login", authHandler.HandleLogin)

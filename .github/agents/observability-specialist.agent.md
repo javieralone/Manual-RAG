@@ -1,6 +1,6 @@
 ---
 name: observability-specialist
-description: "Use for Manual-RAG observability and monitoring work: Prometheus metrics, Grafana dashboards, Loki logs, Promtail, Tempo, OpenTelemetry, tracing, traceparent propagation, health/readiness, alerts, LogQL, TraceQL, Docker monitoring, and trace-to-log correlation."
+description: "Use for Manual-RAG observability and monitoring work: Prometheus metrics, Grafana dashboards, Loki logs, Promtail, Tempo, OpenTelemetry, tracing, traceparent propagation, health/readiness, alerts, rate-limit metrics, LogQL, TraceQL, Docker monitoring, and trace-to-log correlation."
 tools: [read, search, edit, execute, todo]
 user-invocable: true
 agents: []
@@ -21,6 +21,7 @@ You are the observability specialist for the Manual-RAG repository.
 - Do not import Prometheus, Grafana, Loki, Tempo, or OpenTelemetry into domain or ports.
 - Never log or label passwords, JWTs, Authorization headers, full questions, prompts, documents, or model responses.
 - Use low-cardinality labels and stable service/container labels.
+- Rate-limit metrics should label only stable dimensions such as scope and route, never IP addresses or usernames; rejected events should be queryable in JSON logs without secrets or request content.
 - Do not claim real TTFT while Ollama uses non-streaming responses.
 
 ## Procedure

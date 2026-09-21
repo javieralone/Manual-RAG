@@ -20,6 +20,9 @@ type Config struct {
 	RequestTimeout    time.Duration
 	ReadinessInterval time.Duration
 	WorkerLimit       int
+	RateLimitEnabled  bool
+	RateLimitRequests int
+	RateLimitWindow   time.Duration
 	OTLPEndpoint      string
 	Auth              AuthConfig
 }
@@ -78,6 +81,14 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	rateLimitRequests, err := intEnv("RATE_LIMIT_REQUESTS", 60)
+	if err != nil || rateLimitRequests < 1 {
+		return Config{}, errors.New("RATE_LIMIT_REQUESTS debe ser un entero positivo")
+	}
+	rateLimitWindow, err := durationEnv("RATE_LIMIT_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
 
 	roles, err := parseRoles(os.Getenv("AUTH_ADMIN_ROLES"))
 	if err != nil {
@@ -93,6 +104,9 @@ func Load() (Config, error) {
 		RequestTimeout:    requestTimeout,
 		ReadinessInterval: readinessInterval,
 		WorkerLimit:       workerLimit,
+		RateLimitEnabled:  boolEnv("RATE_LIMIT_ENABLED", true),
+		RateLimitRequests: rateLimitRequests,
+		RateLimitWindow:   rateLimitWindow,
 		OTLPEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Auth: AuthConfig{
 			JWTSecret:         accessSecret,
@@ -141,6 +155,18 @@ func intEnv(name string, fallback int) (int, error) {
 		return fallback, nil
 	}
 	return strconv.Atoi(value)
+}
+
+func boolEnv(name string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func parseRoles(raw string) ([]domain.Role, error) {

@@ -1,6 +1,6 @@
 ---
 name: observability-stack
-description: 'Use when changing or debugging Manual-RAG observability and monitoring: Prometheus metrics, Grafana dashboards, Loki logs, Promtail/Alloy collection, Tempo traces, OpenTelemetry/OTLP, traceparent, TraceQL, LogQL, health/readiness, alerts, Docker monitoring, scraping, latency, p95/p99, or trace-to-log correlation.'
+description: 'Use when changing or debugging Manual-RAG observability and monitoring: Prometheus metrics, Grafana dashboards, Loki logs, Promtail/Alloy collection, Tempo traces, OpenTelemetry/OTLP, traceparent, TraceQL, LogQL, health/readiness, alerts, rate-limit metrics, Docker monitoring, scraping, latency, p95/p99, or trace-to-log correlation.'
 argument-hint: 'Describe the observability signal or integration failure to implement.'
 ---
 # Manual-RAG Observability
@@ -19,4 +19,5 @@ argument-hint: 'Describe the observability signal or integration failure to impl
 - Promtail/Alloy sends Docker logs to Loki and uses stable labels only.
 - Tempo receives OTLP on `4317` or `4318` and Grafana has trace-to-log links.
 - Alerts use metric names that exist and are tested against Prometheus targets.
+- Rate-limit metrics use low-cardinality scope/route labels, while rejection logs omit IPs, usernames, credentials, and request content unless explicitly justified.
 - Non-streaming LLM calls must not claim a real TTFT; implement streaming before reporting first-token latency.

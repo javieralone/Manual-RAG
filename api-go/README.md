@@ -62,6 +62,12 @@ Diseñado para ejecutarse de forma segura en entornos con recursos limitados de 
 
 Limita las peticiones concurrentes utilizando un canal con búfer para evitar sobrecargas de RAM y CPU causadas por consultas simultáneas hacia Ollama.
 
+### Rate limiting por IP y usuario
+
+Las rutas `POST /api/v1/query` y `POST /query/stream` aplican dos límites independientes por ventana fija: uno por IP de origen y otro por usuario autenticado. Una petición que supera cualquiera de los límites recibe `429 Too Many Requests` y `Retry-After`. El límite es local a cada instancia del gateway y no reemplaza un rate limiter distribuido si se escala horizontalmente.
+
+Variables: `RATE_LIMIT_ENABLED` (por defecto `true`), `RATE_LIMIT_REQUESTS` (por defecto `60`) y `RATE_LIMIT_WINDOW` (por defecto `1m`). El worker pool (`WORKER_LIMIT`) sigue siendo el límite global de concurrencia y puede responder con saturación aunque el rate limit no se haya alcanzado.
+
 ### Context Cancellation & Timeout Middleware
 
 Toda petición HTTP propaga un `context.Context` con un límite configurable de **5 minutos** por defecto.
@@ -274,7 +280,7 @@ Configura estas variables en el entorno del contenedor `api-go` o en un archivo 
 | `AUTH_ADMIN_PASSWORD_HASH` | Hash bcrypt del password del usuario inicial |
 | `AUTH_ADMIN_ROLES` | Roles separados por coma: `admin`, `operator`, `user` |
 
-Opcionales: `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ACCESS_TTL` (por defecto `15m`), `AUTH_REFRESH_TTL` (por defecto `168h`), `OLLAMA_MODEL`, `WORKER_LIMIT`, `HTTP_CLIENT_TIMEOUT` y `REQUEST_TIMEOUT` (por defecto `5m`) y `READINESS_INTERVAL` (por defecto `15s`).
+Opcionales: `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ACCESS_TTL` (por defecto `15m`), `AUTH_REFRESH_TTL` (por defecto `168h`), `OLLAMA_MODEL`, `WORKER_LIMIT`, `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW`, `HTTP_CLIENT_TIMEOUT` y `REQUEST_TIMEOUT` (por defecto `5m`) y `READINESS_INTERVAL` (por defecto `15s`).
 
 Genera el hash con una herramienta bcrypt confiable, por ejemplo `htpasswd -bnBC 12 "" "tu-password"` y conserva solo el valor despues de los dos puntos. Nunca guardes el password ni los secretos en Git.
 
@@ -312,7 +318,7 @@ Los roles `admin`, `operator` y `user` pueden consultar. La ausencia de token de
 
 ## Observabilidad
 
-El gateway genera logs JSON y trazas OpenTelemetry OTLP. El trace context W3C se propaga hacia `rag-engine` y Ollama. El stack completo está documentado en [`observability/README.md`](../observability/README.md).
+El gateway genera logs JSON y trazas OpenTelemetry OTLP. El trace context W3C se propaga hacia `rag-engine` y Ollama. Los rechazos por límite generan el evento `rate_limit_rejected` con alcance (`ip` o `user`) y ruta, sin etiquetas Prometheus de alta cardinalidad ni datos de autenticación. El stack completo está documentado en [`observability/README.md`](../observability/README.md).
 
 ## Compilacion y ejecucion
 
@@ -323,7 +329,7 @@ Requisitos: Docker y Docker Compose.
 Desde la raíz del proyecto:
 
 ```bash
-docker compose up -d --build api-go
+docker compose --env-file .env.local up -d --build api-go
 ```
 
 ### Probar compilación local
