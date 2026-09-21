@@ -40,6 +40,34 @@ services:
       - qdrant
     restart: unless-stopped
 
+  # 2b. Servidor MCP para GitHub Copilot / clientes MCP
+  mcp-server:
+    build:
+      context: ./rag-engine
+      dockerfile: Dockerfile
+    container_name: rag_mcp_server
+    command: ["python", "-m", "app.mcp_server"]
+    ports:
+      - "8001:8001"
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - MCP_PORT=8001
+      - OMP_NUM_THREADS=2
+      - MKL_NUM_THREADS=2
+    volumes:
+      - huggingface_cache:/app/.cache/huggingface
+      - ./documents:/app/documents
+      - ./output:/app/output
+    deploy:
+      resources:
+        limits:
+          memory: 2.5g
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
   # 3. API Gateway en Go
   api-go:
     build:

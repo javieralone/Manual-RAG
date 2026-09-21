@@ -12,7 +12,11 @@ embedding_adapter = BGEEmbeddingAdapter(model_name="BAAI/bge-m3")
 qdrant_adapter = QdrantAdapter(host=QDRANT_HOST, port=QDRANT_PORT, collection_name="manuales_tecnicos")
 rag_service = RAGService(embedding_provider=embedding_adapter, vector_store=qdrant_adapter)
 
-mcp = FastMCP("Technical Manuals RAG Engine")
+mcp = FastMCP(
+    "Technical Manuals RAG Engine",
+    host="0.0.0.0",
+    port=int(os.getenv("MCP_PORT", "8001")),
+)
 
 @mcp.tool()
 def search_manual(query: str, top_k: int = 3) -> str:
@@ -33,4 +37,4 @@ def search_manual(query: str, top_k: int = 3) -> str:
     return "\n\n".join(results)
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="streamable-http")

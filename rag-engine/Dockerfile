@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 # 3. Instalar el resto de dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
+
 COPY . .
 
 EXPOSE 8000

@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "manual-rag": {
+      "type": "http",
+      "url": "http://localhost:8001/mcp"
+    }
+  }
+}
