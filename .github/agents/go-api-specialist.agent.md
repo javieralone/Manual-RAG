@@ -1,6 +1,6 @@
 ---
 name: go-api-specialist
-description: "Use for Go API Gateway work in api-go: Clean Architecture, ports, query orchestration, HTTP handlers, clients, timeouts, context cancellation, worker pools, and Go tests."
+description: "Use for Go API Gateway tasks in api-go: Go, Clean Architecture, domain, ports, services, query orchestration, HTTP handlers, JWT authentication, authorization, clients, Ollama, RAG client, middleware, timeouts, context cancellation, worker pools, metrics, tracing, and Go tests."
 tools: [read, search, edit, execute, todo]
 user-invocable: true
 agents: []

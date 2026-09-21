@@ -1,6 +1,6 @@
 ---
 name: go-clean-architecture
-description: 'Use when changing api-go Go code: ports, domain errors, query orchestration, HTTP handlers, outbound clients, context cancellation, timeouts, worker pools, or Go tests.'
+description: 'Use when changing api-go Go code: Go, Clean Architecture, domain, ports, services, JWT authentication, authorization, query orchestration, HTTP handlers, RAG/Ollama clients, context cancellation, timeouts, worker pools, metrics, tracing, or Go tests.'
 argument-hint: 'Describe the Go gateway behavior or failing check.'
 ---
 # Go Clean Architecture

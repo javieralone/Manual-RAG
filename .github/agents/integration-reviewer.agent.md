@@ -1,6 +1,6 @@
 ---
 name: integration-reviewer
-description: "Use for reviewing or validating Manual-RAG integration: Docker Compose, service startup, health endpoints, Go-to-Python HTTP contracts, Ollama connectivity, MCP, Qdrant, resource limits, and regression risks."
+description: "Use for Manual-RAG integration review and runtime validation: Docker Compose, Dockerfiles, service startup, health/readiness endpoints, Go-to-Python HTTP contracts, Ollama connectivity, MCP, Qdrant, Prometheus targets, Grafana, Loki, Tempo, resource limits, smoke tests, and regression risks."
 tools: [read, search, execute, todo]
 user-invocable: true
 agents: []

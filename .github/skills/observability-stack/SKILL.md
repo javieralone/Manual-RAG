@@ -1,6 +1,6 @@
 ---
 name: observability-stack
-description: 'Use when changing Manual-RAG observability: Prometheus metrics, Grafana dashboards, Loki/Promtail logs, Tempo/OpenTelemetry traces, health/readiness endpoints, alerts, Docker Compose monitoring, or trace-to-log correlation.'
+description: 'Use when changing or debugging Manual-RAG observability and monitoring: Prometheus metrics, Grafana dashboards, Loki logs, Promtail/Alloy collection, Tempo traces, OpenTelemetry/OTLP, traceparent, TraceQL, LogQL, health/readiness, alerts, Docker monitoring, scraping, latency, p95/p99, or trace-to-log correlation.'
 argument-hint: 'Describe the observability signal or integration failure to implement.'
 ---
 # Manual-RAG Observability

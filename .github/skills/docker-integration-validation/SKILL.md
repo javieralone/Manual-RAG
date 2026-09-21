@@ -1,6 +1,6 @@
 ---
 name: docker-integration-validation
-description: 'Use when validating Manual-RAG across Docker Compose services: Qdrant, rag-engine, MCP, api-go, Ollama connectivity, health checks, ports, environment variables, and end-to-end query flow.'
+description: 'Use when validating Manual-RAG Docker and integration work: Docker Compose, Dockerfiles, Qdrant, rag-engine, MCP, api-go, Ollama, Prometheus, Grafana, Loki, Promtail, Tempo, service startup, health/readiness, ports, environment variables, scraping, logs, traces, and end-to-end query flow.'
 argument-hint: 'Describe the service flow or integration failure to validate.'
 ---
 # Docker Integration Validation
