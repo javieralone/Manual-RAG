@@ -1,6 +1,6 @@
 ---
 name: python-rag-specialist
-description: "Use for rag-engine Python work: RAGService, FastAPI, FastMCP, embedding adapters, Qdrant search, ingestion/OCR scripts, Pydantic schemas, and Python ports."
+description: "Use for rag-engine Python tasks: Python, FastAPI, FastMCP, RAGService, retrieval, embeddings, SentenceTransformers, BGE, Qdrant search, vector store, ingestion, OCR, indexing, Pydantic schemas, Python ports, readiness, metrics, and tests."
 tools: [read, search, edit, execute, todo]
 user-invocable: true
 agents: []

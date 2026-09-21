@@ -15,3 +15,10 @@ type QueryResponse struct {
 	Answer   string          `json:"answer"`
 	Context  []DocumentChunk `json:"context"`
 }
+
+// StreamStats resume el timing de una respuesta en streaming, enviado en el evento "complete".
+type StreamStats struct {
+	TotalDurationMs    int64 `json:"total_duration_ms"`
+	TimeToFirstTokenMs int64 `json:"time_to_first_token_ms"`
+	TokenCount         int   `json:"token_count"`
+}

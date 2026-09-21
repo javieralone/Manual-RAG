@@ -1,6 +1,6 @@
 ---
 name: go-clean-architecture
-description: 'Use when changing api-go Go code: ports, domain errors, query orchestration, HTTP handlers, outbound clients, context cancellation, timeouts, worker pools, or Go tests.'
+description: 'Use when changing api-go Go code: Go, Clean Architecture, domain, ports, services, JWT authentication, authorization, query orchestration, HTTP handlers, RAG/Ollama clients, rate limiting, context cancellation, timeouts, worker pools, metrics, tracing, or Go tests.'
 argument-hint: 'Describe the Go gateway behavior or failing check.'
 ---
 # Go Clean Architecture
@@ -18,4 +18,5 @@ argument-hint: 'Describe the Go gateway behavior or failing check.'
 - HTTP concerns stay in handlers and middleware.
 - Python and Ollama failures remain distinguishable from validation errors.
 - Concurrency limits do not leak goroutines or block cancellation.
+- Rate limiting remains an HTTP concern, is distinct from worker-pool concurrency, and documents whether state is per instance or distributed.
 - JSON changes are intentional and reflected at both integration ends.

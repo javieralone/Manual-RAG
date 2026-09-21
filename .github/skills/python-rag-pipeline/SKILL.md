@@ -1,6 +1,6 @@
 ---
 name: python-rag-pipeline
-description: 'Use when changing rag-engine retrieval: embeddings, Qdrant search, RAGService, Pydantic schemas, FastAPI /search, MCP search_manual, OCR, indexing, or upload scripts.'
+description: 'Use when changing rag-engine Python or RAG retrieval: FastAPI, FastMCP, RAGService, embeddings, SentenceTransformers, BGE, Qdrant/vector search, Pydantic schemas, /search, /ready, /metrics, MCP search_manual, OCR, indexing, ingestion, or Python tests.'
 argument-hint: 'Describe the retrieval, ingestion, or MCP behavior to change.'
 ---
 # Python RAG Pipeline

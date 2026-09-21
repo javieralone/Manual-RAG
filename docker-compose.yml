@@ -12,6 +12,11 @@ services:
       resources:
         limits:
           memory: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /qdrant/storage/raft_state.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # 2. Microservicio Motor RAG (Python)
@@ -28,6 +33,8 @@ services:
       - QDRANT_PORT=6333
       - OMP_NUM_THREADS=2      # Limita hilos de CPU para no saturar los 4 núcleos
       - MKL_NUM_THREADS=2
+      - OTEL_SERVICE_NAME=rag-engine
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     volumes:
       - huggingface_cache:/app/.cache/huggingface  # Guarda el modelo en el volumen
       - ./documents:/app/documents
@@ -36,8 +43,14 @@ services:
       resources:
         limits:
           memory: 2.5g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
 
   # 2b. Servidor MCP para GitHub Copilot / clientes MCP
@@ -56,6 +69,8 @@ services:
       - MCP_PORT=8001
       - OMP_NUM_THREADS=2
       - MKL_NUM_THREADS=2
+      - OTEL_SERVICE_NAME=mcp-server
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     volumes:
       - huggingface_cache:/app/.cache/huggingface
       - ./documents:/app/documents
@@ -65,7 +80,8 @@ services:
         limits:
           memory: 2.5g
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
 
   # 3. API Gateway en Go
@@ -90,6 +106,14 @@ services:
       - AUTH_ADMIN_PASSWORD_HASH=${AUTH_ADMIN_PASSWORD_HASH:?AUTH_ADMIN_PASSWORD_HASH must be set}
       - AUTH_ADMIN_ROLES=${AUTH_ADMIN_ROLES:-admin}
       - WORKER_LIMIT=${WORKER_LIMIT:-2}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-60}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-1m}
+      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-5m}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-5m}
+      - READINESS_INTERVAL=${READINESS_INTERVAL:-15s}
+      - OTEL_SERVICE_NAME=api-go
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     extra_hosts:
       - "host.docker.internal:host-gateway" # Permite resolver host.docker.internal hacia tu máquina host en Linux/WSL2
     deploy:
@@ -97,8 +121,86 @@ services:
         limits:
           memory: 256m
     depends_on:
+      rag-engine:
+        condition: service_started
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: rag_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+    depends_on:
+      - api-go
       - rag-engine
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: rag_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: rag_loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: rag_promtail
+    volumes:
+      - ./observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail_positions:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: rag_tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
     restart: unless-stopped
 
 volumes:
   huggingface_cache:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+  promtail_positions:

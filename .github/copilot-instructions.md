@@ -24,7 +24,13 @@
 - Report stale documentation, missing tests, or environment blockers explicitly.
 
 ## Delegation
-- Use `go-api-specialist` for Go gateway, ports, handlers, clients, middleware, and worker-pool work.
-- Use `python-rag-specialist` for embeddings, Qdrant, FastAPI, MCP, ingestion, and Python domain code.
-- Use `integration-reviewer` for Docker Compose, cross-service contracts, runtime checks, and code review.
-- Use `rag-system-architect` when a request spans more than one service or needs sequencing.
+- Use `rag-system-architect` first for tasks mentioning more than one service, architecture, contracts, authentication across services, deployment sequencing, or broad feature work.
+- Use `go-api-specialist` for Go, `api-go`, domain, ports, services, handlers, JWT auth, clients, middleware, timeouts, worker pools, or Go tests.
+- Use `python-rag-specialist` for Python, `rag-engine`, FastAPI, FastMCP, RAGService, embeddings, Qdrant, OCR, indexing, schemas, or Python tests.
+- Use `observability-specialist` for metrics, Prometheus, Grafana, dashboards, logs, Loki, Promtail, Alloy, traces, Tempo, OpenTelemetry, OTLP, TraceQL, LogQL, alerts, readiness, scraping, or telemetry correlation.
+- Use `integration-reviewer` for Docker Compose, Dockerfiles, startup, runtime smoke tests, cross-service contracts, health checks, resource limits, and regression review.
+
+## Automatic task routing
+- Select the most specific specialist based on the task keywords above before editing.
+- When multiple routing categories match, use `rag-system-architect` to coordinate and delegate; do not duplicate the same investigation in several agents.
+- Always load the relevant skill after selecting the agent: `go-clean-architecture`, `python-rag-pipeline`, `observability-stack`, or `docker-integration-validation`.

@@ -1,0 +1,59 @@
+groups:
+  - name: manual-rag
+    rules:
+      - alert: ManualRAGServiceDown
+        expr: up{job=~"api-go|rag-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Manual-RAG service is down
+      - alert: ManualRAGHighLatency
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(api_go_http_request_duration_seconds_bucket[5m]))) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API Gateway p95 latency is high
+      - alert: ManualRAGHighErrorRate
+        expr: sum(rate(api_go_http_requests_total{status=~"5.."}[5m])) / sum(rate(api_go_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API Gateway error rate is high
+      - alert: ManualRAGOllamaDown
+        expr: sum(rate(api_go_dependency_requests_total{dependency="ollama",result="error"}[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ollama requests are failing
+      - alert: ManualRAGQdrantDown
+        expr: sum(rate(rag_engine_errors_total{component="qdrant"}[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Qdrant requests are failing
+      - alert: ManualRAGServiceNotReady
+        expr: api_go_readiness == 0 or rag_engine_readiness == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Manual-RAG service is not ready
+      - alert: ManualRAGWorkerPoolSaturated
+        expr: api_go_worker_pool_rejections_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API Gateway worker pool is rejecting requests
+      - alert: ManualRAGPrometheusScrapeFailure
+        expr: up{job=~"api-go|rag-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus cannot scrape an application target

@@ -49,81 +49,150 @@ Respuesta generada
 
 ## 🏗️ Arquitectura del proyecto
 
+Manual-RAG está diseñado como una solución distribuida orientada a servicios, con separación clara entre entrada HTTP, recuperación semántica, almacenamiento vectorial y generación de respuestas.
+
+### Diagrama de alto nivel
+
+```text
+Usuario / Cliente
+      │
+      ▼
+api-go (Gateway HTTP en Go)
+      │
+      ├── Valida autenticación y autorización
+      ├── Aplica rate limiting y timeouts
+      ├── Orquesta la consulta
+      ▼
+rag-engine (Motor RAG en Python)
+      │
+      ├── Genera embedding de la pregunta
+      ├── Consulta Qdrant por similitud semántica
+      ├── Recupera contextos relevantes
+      └── Devuelve el contexto y metadatos
+      │
+      ▼
+Qdrant (base vectorial)
+      │
+      ▼
+Ollama (modelo local de lenguaje)
+      │
+      ▼
+Respuesta final al cliente
+```
+
+Además, el proyecto incluye:
+
+- `mcp-server`: exposición del sistema a clientes MCP compatibles.
+- `prometheus`, `grafana`, `loki`, `promtail` y `tempo`: stack de observabilidad para métricas, logs y trazas.
+
+### Estructura del repositorio
+
 ```text
 Manual-RAG/
-├── api-go/                         # API Gateway desarrollado en Go
+├── .vscode/                         # Configuración del cliente MCP
+│   └── mcp.json
+├── api-go/                          # Gateway HTTP y orquestación de consultas
 │   ├── cmd/
 │   │   └── api/
-│   │       └── main.go             # Punto de entrada de la aplicación
+│   │       └── main.go
 │   ├── internal/
 │   │   ├── core/
-│   │   │   ├── domain/             # Entidades y reglas de negocio
-│   │   │   ├── ports/              # Interfaces del dominio
-│   │   │   └── services/           # Casos de uso y orquestación
-│   │   └── adapters/
-│   │       ├── http/               # Handlers, router y middlewares
-│   │       ├── clients/            # Clientes para Python y Ollama
-│   │       └── decorators/         # Control de concurrencia
+│   │   │   ├── domain/
+│   │   │   ├── ports/
+│   │   │   └── services/
+│   │   ├── adapters/
+│   │   │   ├── auth/
+│   │   │   ├── clients/
+│   │   │   ├── decorators/
+│   │   │   ├── http/
+│   │   │   └── observability/
+│   │   └── README.md
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── README.md
 │
-├── rag-engine/                     # Motor RAG desarrollado en Python
+├── rag-engine/                      # Servicio de recuperación y embeddings
 │   ├── app/
-│   │   ├── adapters/               # Implementaciones concretas
+│   │   ├── adapters/
 │   │   ├── core/
-│   │   │   ├── domain/             # Entidades del dominio
-│   │   │   ├── ports/              # Interfaces y contratos
-│   │   │   └── services/           # Casos de uso RAG
-│   │   └── infrastructure/         # Configuración e infraestructura
+│   │   ├── main.py
+│   │   ├── mcp_server.py
+│   │   ├── observability.py
+│   │   └── __init__.py
 │   ├── scripts/
-│   │   ├── index_manual.py         # Indexación de manuales
-│   │   ├── ocr_manual.py           # Procesamiento OCR
-│   │   ├── query_rag.py            # Consultas al sistema RAG
-│   │   └── upload_to_qdrant.py     # Carga de vectores
-│   ├── main.py                     # API interna con FastAPI
-│   ├── mcp_server.py               # Servidor MCP
+│   │   ├── index_manual.py
+│   │   ├── ocr_manual.py
+│   │   ├── query_rag.py
+│   │   ├── test_rag_direct.py
+│   │   └── upload_to_qdrant.py
+│   ├── tests/
+│   │   └── test_observability.py
 │   ├── requirements.txt
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── README.md
 │
-├── documents/                      # Manuales y documentos originales
-├── output/                         # Archivos procesados y resultados
-├── qdrant_storage/                 # Almacenamiento persistente de Qdrant
-├── .vscode/
-│   └── mcp.json                    # Configuración del servidor MCP
+├── observability/                   # Métricas, trazas y logs
+│   ├── grafana/
+│   ├── loki/
+│   ├── prometheus/
+│   ├── promtail/
+│   └── tempo/
+│
+├── documents/                      # Manuales originales cargados al sistema
+├── output/                         # Artefactos generados durante procesamiento
+├── qdrant_storage/                 # Persistencia del índice vectorial
+├── .env.example                    # Plantilla de configuración
+├── .env.local                      # Configuración local con secretos (ignorada)
+├── .gitignore
 ├── docker-compose.yml              # Orquestación de servicios
-└── README.md
+├── README.md
+└── .github/
 ```
+
+### Componentes y responsabilidades
+
+| Componente | Rol principal |
+|---|---|
+| `api-go` | Gateway público, autenticación, timeout, rate limiting y orquestación |
+| `rag-engine` | Generación de embeddings, búsqueda semántica y recuperación de contexto |
+| `mcp-server` | Exposición del servicio RAG a clientes MCP |
+| `qdrant` | Base vectorial para búsqueda por similitud |
+| `ollama` | Generación final de respuesta a partir del contexto recuperado |
+| `prometheus`, `grafana`, `loki`, `tempo` | Observabilidad centralizada del sistema |
+
+> La implementación sigue una arquitectura limpia (Clean Architecture) con dominio, puertos y adaptadores bien definidos, evitando acoplamiento directo entre la lógica de negocio y los servicios externos.
 
 ---
 
 ## 🧩 Principios de diseño
 
-El proyecto sigue una arquitectura hexagonal y principios de **Clean Architecture**.
+El proyecto sigue principios de arquitectura hexagonal y de **Clean Architecture** para mantener el sistema fácil de extender, testear y operar.
 
 ### Separación de responsabilidades
 
-Cada componente tiene una responsabilidad específica:
+Cada capa tiene una misión concreta:
 
-- La API en Go gestiona las peticiones HTTP.
-- El motor Python gestiona la recuperación de información.
-- Qdrant almacena y consulta los vectores.
-- Ollama genera la respuesta final.
-- Los contratos se definen mediante interfaces o puertos.
+- La API en Go recibe y valida requests HTTP.
+- El motor Python realiza la recuperación semántica y la lógica RAG.
+- Qdrant almacena y consulta embeddings para similitud.
+- Ollama genera la respuesta final con contexto relevante.
+- Los contratos entre capas se expresan mediante interfaces o puertos.
 
-### Dependency Inversion Principle
+### Inversión de dependencias
 
-El núcleo de la aplicación depende de abstracciones y no de implementaciones concretas.
+El núcleo del sistema depende de abstracciones, no de implementaciones concretas.
 
-Por ejemplo, el adaptador de embeddings implementa el contrato definido por `EmbeddingPort`, permitiendo cambiar el modelo de embeddings sin modificar la lógica principal del sistema.
+Esto permite cambiar el modelo de embeddings, el cliente de búsqueda o la infraestructura sin reescribir la lógica principal. Un ejemplo claro es el adaptador de embeddings que implementa el contrato `EmbeddingPort`.
 
-### Control de concurrencia
+### Control de concurrencia y resiliencia
 
-El API Gateway utiliza un mecanismo de control de concurrencia para evitar que demasiadas consultas simultáneas saturen la memoria o el procesador.
+El gateway Go implementa control de concurrencia para evitar saturar la memoria y el CPU cuando hay varias consultas simultáneas.
 
-### Cancelación y timeout
+Además, las rutas de consulta aplican rate limiting por IP y usuario autenticado. Los parámetros `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW` permiten ajustar la protección. Si se excede la cuota, el sistema responde con `429 Too Many Requests`.
 
-Las peticiones HTTP utilizan contextos con timeout para evitar conexiones bloqueadas y liberar recursos cuando el cliente cancela una solicitud.
+### Cancelación y timeouts
+
+Las llamadas HTTP y los flujos de consulta usan contextos con timeout para evitar bloqueos, liberar recursos y responder correctamente cuando el cliente cancela una solicitud.
 
 ---
 
@@ -205,7 +274,7 @@ Respuesta:
 
 ### `POST /api/v1/query`
 
-Realiza una consulta sobre los manuales indexados.
+Realiza una consulta autenticada sobre los manuales indexados. Requiere un token de acceso en la cabecera `Authorization`.
 
 Petición:
 
@@ -235,6 +304,7 @@ Ejemplo utilizando `curl`:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
@@ -242,6 +312,37 @@ curl -X POST http://localhost:8080/api/v1/query \
 ```
 
 > Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
+
+### `POST /query/stream`
+
+Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`api-go/README.md`](api-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
+
+```bash
+curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
+```
+
+### Autenticación
+
+Obtén un par de tokens con las credenciales configuradas para el usuario administrador:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<password>"}'
+```
+
+Renueva el acceso cuando expire el token:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh_token>"}'
+```
+
+Los endpoints `/health`, `/ready` y `/metrics` son públicos. La consulta requiere `Bearer <access_token>`.
 
 ---
 
@@ -325,7 +426,7 @@ Cuando llega una pregunta al sistema:
 El proyecto incluye un servidor MCP en:
 
 ```text
-rag-engine/mcp_server.py
+rag-engine/app/mcp_server.py
 ```
 
 La configuración para clientes compatibles se encuentra en:
@@ -381,10 +482,16 @@ Instala las dependencias:
 pip install -r requirements.txt
 ```
 
-Inicia el servicio:
+Inicia el servicio FastAPI:
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+El servidor MCP se inicia por separado en el puerto `8001`:
+
+```bash
+python -m app.mcp_server
 ```
 
 ### Ejecutar el API Gateway en Go
@@ -411,32 +518,57 @@ go test ./...
 | `api-go` | API Gateway y punto de entrada público |
 | `rag-engine` | Recuperación semántica y API interna |
 | `qdrant` | Base de datos vectorial |
-| `ollama` | Generación de respuestas mediante un LLM |
-| `manual-rag` | Servidor MCP para agentes |
+| `mcp-server` | Servidor MCP para agentes |
+| Ollama en el host | Generación de respuestas mediante un LLM |
+| `prometheus`, `grafana`, `loki`, `tempo` | Métricas, paneles, logs y trazas |
 
 ---
 
 ## 🔐 Variables de configuración
 
-La configuración puede variar según el entorno. Algunos valores habituales son:
+La configuración puede variar según el entorno. Docker Compose utiliza estas variables principales:
 
 ```env
-RAG_ENGINE_URL=http://rag-engine:8001
-OLLAMA_URL=http://ollama:11434
-QDRANT_URL=http://qdrant:6333
-QDRANT_COLLECTION=manuals
-EMBEDDING_MODEL=BAAI/bge-m3
+PYTHON_ENGINE_URL=http://rag-engine:8000
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=qwen2.5:1.5b
+AUTH_JWT_SECRET=<secreto>
+AUTH_REFRESH_SECRET=<secreto>
+AUTH_ADMIN_USERNAME=admin
+AUTH_ADMIN_PASSWORD_HASH=<hash-bcrypt>
+WORKER_LIMIT=2
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=60
+RATE_LIMIT_WINDOW=1m
+HTTP_CLIENT_TIMEOUT=5m
+REQUEST_TIMEOUT=5m
 ```
 
-No incluyas claves privadas, tokens ni credenciales directamente en el repositorio.
+El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, la colección `manuales_tecnicos` y el modelo de embeddings `BAAI/bge-m3`. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
 
-Para desarrollo local puedes utilizar un archivo `.env`:
+No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
-```bash
-cp .env.example .env
+Para desarrollo local copia `.env.example` a `.env.local`, completa los secretos y usa ese archivo explícitamente con Docker Compose:
+
+```powershell
+Copy-Item .env.example .env.local
+docker compose --env-file .env.local up -d --build
 ```
 
-Si el proyecto no incluye `.env.example`, crea el archivo `.env` siguiendo las variables definidas en `docker-compose.yml`.
+`.env.example` es apto para versionar; `.env.local` y `.env` están ignorados porque pueden contener secretos. Si ya usas `.env`, puedes continuar con `docker compose up`; para el archivo local separado debes indicar siempre `--env-file .env.local`.
+
+### Puertos
+
+| Servicio | Puerto local |
+|---|---:|
+| API Gateway | `8080` |
+| RAG Engine | `8000` |
+| MCP | `8001` |
+| Qdrant | `6333` (HTTP), `6334` (gRPC) |
+| Grafana | `3000` |
+| Prometheus | `9090` |
+| Loki | `3100` |
+| Tempo | `3200`, OTLP `4317`/`4318` |
 
 ---
 
@@ -498,7 +630,7 @@ output/
 qdrant_storage/
 ```
 
-El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar perder los vectores al reiniciar los contenedores.
+El directorio `qdrant_storage/` se monta directamente desde el host, por lo que conserva los vectores al reiniciar los contenedores. `docker compose down -v` elimina los volúmenes nombrados, pero no borra ese directorio; elimínalo manualmente solo si quieres reconstruir el índice.
 
 ---
 
@@ -517,9 +649,7 @@ El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar
 
 ## 🛣️ Próximas mejoras
 
-- Añadir autenticación para la API.
 - Incorporar streaming de respuestas.
-- Añadir métricas y observabilidad.
 - Crear una interfaz web para realizar consultas.
 - Añadir evaluación automática de la calidad de las respuestas.
 - Incorporar filtros por documento, capítulo o sección.
@@ -527,6 +657,36 @@ El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar
 - Mejorar el procesamiento OCR de manuales escaneados.
 - Añadir pruebas de integración con Docker Compose.
 - Incorporar una cola de trabajos para la indexación de documentos.
+
+---
+
+## 📈 Observabilidad
+
+El sistema incluye observabilidad end-to-end:
+
+- `/health`, `/ready` y `/metrics` en `api-go` y `rag-engine`.
+- Métricas Prometheus de tráfico, latencias, errores, autenticación, concurrencia, retrieval, embeddings, Qdrant y Ollama.
+- Logs JSON en Go y Python.
+- Promtail recoge los logs Docker y los envía a Loki con labels estables (`service`, `container`, `project`, `environment`, `level`).
+- Trazas OpenTelemetry OTLP con destino Tempo y propagación W3C entre gateway, RAG engine y Ollama.
+- Stack Docker Compose con Prometheus, Grafana, Loki y Tempo.
+- Dashboard provisionado en `observability/grafana/dashboards/`.
+- Alertas base en `observability/prometheus/alerts.yml` para disponibilidad, latencia, errores, Ollama y Qdrant.
+
+URLs locales:
+
+| Servicio | URL |
+|---|---|
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
+| Loki | `http://localhost:3100` |
+| Tempo | `http://localhost:3200` |
+
+Para levantar todo:
+
+```bash
+docker compose up -d --build
+```
 
 ---
 
