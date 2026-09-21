@@ -49,82 +49,150 @@ Respuesta generada
 
 ## 🏗️ Arquitectura del proyecto
 
+Manual-RAG está diseñado como una solución distribuida orientada a servicios, con separación clara entre entrada HTTP, recuperación semántica, almacenamiento vectorial y generación de respuestas.
+
+### Diagrama de alto nivel
+
+```text
+Usuario / Cliente
+      │
+      ▼
+api-go (Gateway HTTP en Go)
+      │
+      ├── Valida autenticación y autorización
+      ├── Aplica rate limiting y timeouts
+      ├── Orquesta la consulta
+      ▼
+rag-engine (Motor RAG en Python)
+      │
+      ├── Genera embedding de la pregunta
+      ├── Consulta Qdrant por similitud semántica
+      ├── Recupera contextos relevantes
+      └── Devuelve el contexto y metadatos
+      │
+      ▼
+Qdrant (base vectorial)
+      │
+      ▼
+Ollama (modelo local de lenguaje)
+      │
+      ▼
+Respuesta final al cliente
+```
+
+Además, el proyecto incluye:
+
+- `mcp-server`: exposición del sistema a clientes MCP compatibles.
+- `prometheus`, `grafana`, `loki`, `promtail` y `tempo`: stack de observabilidad para métricas, logs y trazas.
+
+### Estructura del repositorio
+
 ```text
 Manual-RAG/
-├── api-go/                         # API Gateway desarrollado en Go
+├── .vscode/                         # Configuración del cliente MCP
+│   └── mcp.json
+├── api-go/                          # Gateway HTTP y orquestación de consultas
 │   ├── cmd/
 │   │   └── api/
-│   │       └── main.go             # Punto de entrada de la aplicación
+│   │       └── main.go
 │   ├── internal/
 │   │   ├── core/
-│   │   │   ├── domain/             # Entidades y reglas de negocio
-│   │   │   ├── ports/              # Interfaces del dominio
-│   │   │   └── services/           # Casos de uso y orquestación
-│   │   └── adapters/
-│   │       ├── http/               # Handlers, router y middlewares
-│   │       ├── clients/            # Clientes para Python y Ollama
-│   │       └── decorators/         # Control de concurrencia
+│   │   │   ├── domain/
+│   │   │   ├── ports/
+│   │   │   └── services/
+│   │   ├── adapters/
+│   │   │   ├── auth/
+│   │   │   ├── clients/
+│   │   │   ├── decorators/
+│   │   │   ├── http/
+│   │   │   └── observability/
+│   │   └── README.md
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── README.md
 │
-├── rag-engine/                     # Motor RAG desarrollado en Python
+├── rag-engine/                      # Servicio de recuperación y embeddings
 │   ├── app/
-│   │   ├── adapters/               # Implementaciones concretas
+│   │   ├── adapters/
 │   │   ├── core/
-│   │   │   ├── domain/             # Entidades del dominio
-│   │   │   ├── ports/              # Interfaces y contratos
-│   │   │   └── services/           # Casos de uso RAG
-│   │   ├── main.py                  # API interna con FastAPI
-│   │   └── mcp_server.py            # Servidor MCP
+│   │   ├── main.py
+│   │   ├── mcp_server.py
+│   │   ├── observability.py
+│   │   └── __init__.py
 │   ├── scripts/
-│   │   ├── index_manual.py         # Indexación de manuales
-│   │   ├── ocr_manual.py           # Procesamiento OCR
-│   │   ├── query_rag.py            # Consultas al sistema RAG
-│   │   └── upload_to_qdrant.py     # Carga de vectores
+│   │   ├── index_manual.py
+│   │   ├── ocr_manual.py
+│   │   ├── query_rag.py
+│   │   ├── test_rag_direct.py
+│   │   └── upload_to_qdrant.py
+│   ├── tests/
+│   │   └── test_observability.py
 │   ├── requirements.txt
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── README.md
 │
-├── documents/                      # Manuales y documentos originales
-├── output/                         # Archivos procesados y resultados
-├── qdrant_storage/                 # Almacenamiento persistente de Qdrant
-├── .vscode/
-│   └── mcp.json                    # Configuración del servidor MCP
+├── observability/                   # Métricas, trazas y logs
+│   ├── grafana/
+│   ├── loki/
+│   ├── prometheus/
+│   ├── promtail/
+│   └── tempo/
+│
+├── documents/                      # Manuales originales cargados al sistema
+├── output/                         # Artefactos generados durante procesamiento
+├── qdrant_storage/                 # Persistencia del índice vectorial
+├── .env.example                    # Plantilla de configuración
+├── .env.local                      # Configuración local con secretos (ignorada)
+├── .gitignore
 ├── docker-compose.yml              # Orquestación de servicios
-└── README.md
+├── README.md
+└── .github/
 ```
+
+### Componentes y responsabilidades
+
+| Componente | Rol principal |
+|---|---|
+| `api-go` | Gateway público, autenticación, timeout, rate limiting y orquestación |
+| `rag-engine` | Generación de embeddings, búsqueda semántica y recuperación de contexto |
+| `mcp-server` | Exposición del servicio RAG a clientes MCP |
+| `qdrant` | Base vectorial para búsqueda por similitud |
+| `ollama` | Generación final de respuesta a partir del contexto recuperado |
+| `prometheus`, `grafana`, `loki`, `tempo` | Observabilidad centralizada del sistema |
+
+> La implementación sigue una arquitectura limpia (Clean Architecture) con dominio, puertos y adaptadores bien definidos, evitando acoplamiento directo entre la lógica de negocio y los servicios externos.
 
 ---
 
 ## 🧩 Principios de diseño
 
-El proyecto sigue una arquitectura hexagonal y principios de **Clean Architecture**.
+El proyecto sigue principios de arquitectura hexagonal y de **Clean Architecture** para mantener el sistema fácil de extender, testear y operar.
 
 ### Separación de responsabilidades
 
-Cada componente tiene una responsabilidad específica:
+Cada capa tiene una misión concreta:
 
-- La API en Go gestiona las peticiones HTTP.
-- El motor Python gestiona la recuperación de información.
-- Qdrant almacena y consulta los vectores.
-- Ollama genera la respuesta final.
-- Los contratos se definen mediante interfaces o puertos.
+- La API en Go recibe y valida requests HTTP.
+- El motor Python realiza la recuperación semántica y la lógica RAG.
+- Qdrant almacena y consulta embeddings para similitud.
+- Ollama genera la respuesta final con contexto relevante.
+- Los contratos entre capas se expresan mediante interfaces o puertos.
 
-### Dependency Inversion Principle
+### Inversión de dependencias
 
-El núcleo de la aplicación depende de abstracciones y no de implementaciones concretas.
+El núcleo del sistema depende de abstracciones, no de implementaciones concretas.
 
-Por ejemplo, el adaptador de embeddings implementa el contrato definido por `EmbeddingPort`, permitiendo cambiar el modelo de embeddings sin modificar la lógica principal del sistema.
+Esto permite cambiar el modelo de embeddings, el cliente de búsqueda o la infraestructura sin reescribir la lógica principal. Un ejemplo claro es el adaptador de embeddings que implementa el contrato `EmbeddingPort`.
 
-### Control de concurrencia
+### Control de concurrencia y resiliencia
 
-El API Gateway utiliza un mecanismo de control de concurrencia para evitar que demasiadas consultas simultáneas saturen la memoria o el procesador.
+El gateway Go implementa control de concurrencia para evitar saturar la memoria y el CPU cuando hay varias consultas simultáneas.
 
-Además, las rutas de consulta aplican rate limiting independiente por IP y usuario autenticado. Los límites se configuran con `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW`; una petición que supera la cuota recibe `429 Too Many Requests`. Este estado es local a cada instancia del gateway.
+Además, las rutas de consulta aplican rate limiting por IP y usuario autenticado. Los parámetros `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW` permiten ajustar la protección. Si se excede la cuota, el sistema responde con `429 Too Many Requests`.
 
-### Cancelación y timeout
+### Cancelación y timeouts
 
-Las peticiones HTTP utilizan contextos con timeout para evitar conexiones bloqueadas y liberar recursos cuando el cliente cancela una solicitud.
+Las llamadas HTTP y los flujos de consulta usan contextos con timeout para evitar bloqueos, liberar recursos y responder correctamente cuando el cliente cancela una solicitud.
 
 ---
 
