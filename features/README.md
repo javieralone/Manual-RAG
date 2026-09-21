@@ -12,6 +12,7 @@ Este directorio organiza las mejoras pendientes del proyecto por prioridad de im
 6. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
 7. [07 - UI de consulta y administración](07-ui-consulta-admin.md)
 8. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
+9. [09 - Dashboard de observabilidad operativa](09-dashboard-observabilidad-operativa.md)
 
 ## Principio de priorización
 
