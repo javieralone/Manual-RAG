@@ -1,15 +1,14 @@
 # Roadmap de features pendientes
 
-Este directorio organiza las mejoras pendientes del proyecto por prioridad de implementación y por dependencias técnicas. Las features 01, 02 y 09 ya están implementadas y no forman parte de este roadmap.
+Este directorio organiza las mejoras pendientes del proyecto por prioridad de implementación y por dependencias técnicas. Las features 01, 02, 03 y 09 ya están implementadas y no forman parte de este roadmap.
 
 ## Orden recomendado
 
-1. [03 - Filtros por documento, capítulo y sección](03-filtros-documentos.md)
-2. [04 - Mejora de OCR para manuales escaneados](04-mejora-ocr.md)
-3. [05 - Soporte multi-colección y multi-manual](05-soporte-multi-coleccion.md)
-4. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
-5. [07 - UI de consulta y administración](07-ui-consulta-admin.md)
-6. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
+1. [04 - Mejora de OCR para manuales escaneados](04-mejora-ocr.md)
+2. [05 - Soporte multi-colección y multi-manual](05-soporte-multi-coleccion.md)
+3. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
+4. [07 - UI de consulta y administración](07-ui-consulta-admin.md)
+5. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
 
 ## Principio de priorización
 
@@ -20,7 +19,7 @@ Las tareas se han ordenado con dos criterios:
 
 ### Dependencias clave
 
-- Los filtros y multi-colección dependen de un vocabulario estable de metadatos y de una estrategia de indexación consistente.
+- La multi-colección depende del vocabulario estable de metadatos y de la estrategia de indexación consistente incorporados en la feature 03.
 - La cola de procesamiento es más útil cuando ya hay una estructura clara de documentos y metadatos.
 - La UI y los tests de integración suelen hacerse después de estabilizar la capa de negocio y la infraestructura.
 
@@ -31,7 +30,7 @@ Las tareas se han ordenado con dos criterios:
 - 02 - Evaluación automática de calidad del RAG
 
 ### Fase 1: mejora del contenido y la búsqueda
-- 03 - Filtros por documento, capítulo y sección
+- 03 - Filtros por documento, capítulo y sección (implementada)
 - 04 - Mejora de OCR para manuales escaneados
 - 05 - Soporte multi-colección y multi-manual
 

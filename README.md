@@ -660,7 +660,6 @@ El roadmap del proyecto puede enfocarse en tres grandes líneas: mejor experienc
 ### Calidad del RAG
 
 - Añadir evaluación automática de calidad de respuestas mediante groundedness, relevancia y precisión del contexto.
-- Incorporar filtros por documento, capítulo, sección o tipo de contenido.
 - Soportar múltiples colecciones o índices por familia de manuales.
 - Mejorar la extracción de texto OCR para documentos escaneados o con baja calidad.
 
