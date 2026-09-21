@@ -124,17 +124,61 @@ Endpoint de verificación de estado destinado a Docker y orquestadores.
 {
   "status": "UP"
 }
+
+## Autenticacion y autorizacion
+
+El API Gateway centraliza la autenticacion de usuario. `rag-engine` no recibe ni valida credenciales finales.
+
+### Variables requeridas
+
+Configura estas variables en el entorno del contenedor `api-go` o en un archivo `.env` local que no se versiona:
+
+| Variable | Descripcion |
+|---|---|
+| `AUTH_JWT_SECRET` | Secreto HS256 del access token, minimo 32 caracteres |
+| `AUTH_REFRESH_SECRET` | Secreto HS256 separado para refresh tokens, minimo 32 caracteres |
+| `AUTH_ADMIN_USERNAME` | Usuario inicial configurado en el gateway |
+| `AUTH_ADMIN_PASSWORD_HASH` | Hash bcrypt del password del usuario inicial |
+| `AUTH_ADMIN_ROLES` | Roles separados por coma: `admin`, `operator`, `user` |
+
+Opcionales: `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ACCESS_TTL` (por defecto `15m`), `AUTH_REFRESH_TTL` (por defecto `168h`), `OLLAMA_MODEL` y `WORKER_LIMIT`.
+
+Genera el hash con una herramienta bcrypt confiable, por ejemplo `htpasswd -bnBC 12 "" "tu-password"` y conserva solo el valor despues de los dos puntos. Nunca guardes el password ni los secretos en Git.
+
+### Login
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"tu-password"}
 ```
 
----
+La respuesta contiene `access_token`, `refresh_token`, `token_type` y sus fechas de expiracion.
 
-## 🛠️ Compilación y Ejecución
+### Refresh
 
-### Requisitos
+```http
+POST /api/v1/auth/refresh
+Content-Type: application/json
 
-- Docker
-- Docker Compose
-- Go 1.22+ (opcional, para compilación local)
+{"refresh_token":"..."}
+```
+
+Los refresh tokens son JWT stateless y expiran; no existe revocacion persistente hasta incorporar un almacen de sesiones o una lista de revocacion.
+
+### Consulta protegida
+
+```http
+POST /api/v1/query
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+Los roles `admin`, `operator` y `user` pueden consultar. La ausencia de token devuelve `401`; un token valido sin rol permitido devuelve `403`.
+🛠️ Compilación y Ejecución
+Requisitos
+Docker & Docker Compose
 
 ### Ejecutar con Docker Compose
 
@@ -151,6 +195,6 @@ cd api-go
 
 go mod tidy
 go build -v ./...
-```
+go test ./...
 
 ---
