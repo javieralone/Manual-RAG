@@ -8,7 +8,7 @@ import ollama
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 COLLECTION_NAME = "manuales_tecnicos"
-OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_MODEL = "qwen2.5:1.5b"
 
 # 2. Conectar a Qdrant y cargar el modelo de embeddings
 print("Conectando a Qdrant y cargando BGE-M3...")

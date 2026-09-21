@@ -57,7 +57,7 @@ func NewRAGService() *RAGService {
 	return &RAGService{
 		PythonEngineURL: pythonURL,
 		OllamaURL:       ollamaURL,
-		ModelName:       "qwen2.5:7b",
+		ModelName:       "qwen2.5:1.5b",
 	}
 }
 
