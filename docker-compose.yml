@@ -79,6 +79,17 @@ services:
     environment:
       - PYTHON_ENGINE_URL=http://rag-engine:8000
       - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET must be set}
+      - AUTH_REFRESH_SECRET=${AUTH_REFRESH_SECRET:?AUTH_REFRESH_SECRET must be set}
+      - AUTH_ISSUER=${AUTH_ISSUER:-manual-rag-api}
+      - AUTH_AUDIENCE=${AUTH_AUDIENCE:-manual-rag-client}
+      - AUTH_ACCESS_TTL=${AUTH_ACCESS_TTL:-15m}
+      - AUTH_REFRESH_TTL=${AUTH_REFRESH_TTL:-168h}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:?AUTH_ADMIN_USERNAME must be set}
+      - AUTH_ADMIN_PASSWORD_HASH=${AUTH_ADMIN_PASSWORD_HASH:?AUTH_ADMIN_PASSWORD_HASH must be set}
+      - AUTH_ADMIN_ROLES=${AUTH_ADMIN_ROLES:-admin}
+      - WORKER_LIMIT=${WORKER_LIMIT:-2}
     extra_hosts:
       - "host.docker.internal:host-gateway" # Permite resolver host.docker.internal hacia tu máquina host en Linux/WSL2
     deploy:
