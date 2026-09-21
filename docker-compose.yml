@@ -49,6 +49,8 @@ services:
     environment:
       - PYTHON_ENGINE_URL=http://rag-engine:8000
       - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Permite resolver host.docker.internal hacia tu máquina host en Linux/WSL2
     deploy:
       resources:
         limits:
