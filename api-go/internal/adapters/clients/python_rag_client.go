@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
+	"api-go/internal/adapters/observability"
 	"api-go/internal/core/domain"
 )
 
@@ -22,12 +24,14 @@ type pythonSearchResponse struct {
 type PythonRAGClient struct {
 	baseURL    string
 	httpClient *http.Client
+	metrics    *observability.Metrics
 }
 
-func NewPythonRAGClient(baseURL string, httpClient *http.Client) *PythonRAGClient {
+func NewPythonRAGClient(baseURL string, httpClient *http.Client, metrics *observability.Metrics) *PythonRAGClient {
 	return &PythonRAGClient{
 		baseURL:    baseURL,
 		httpClient: httpClient,
+		metrics:    metrics,
 	}
 }
 
@@ -45,15 +49,29 @@ func (c *PythonRAGClient) RetrieveContext(ctx context.Context, query string, top
 		return nil, fmt.Errorf("error creando request HTTP a rag-engine: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	observability.InjectTraceContext(ctx, req.Header)
 
+	started := time.Now()
 	resp, err := c.httpClient.Do(req)
+	if c.metrics != nil {
+		c.metrics.DependencyDuration.WithLabelValues("rag-engine").Observe(time.Since(started).Seconds())
+	}
 	if err != nil {
+		if c.metrics != nil {
+			c.metrics.DependencyTotal.WithLabelValues("rag-engine", "error").Inc()
+		}
 		return nil, fmt.Errorf("error conectando con rag-engine: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if c.metrics != nil {
+			c.metrics.DependencyTotal.WithLabelValues("rag-engine", "error").Inc()
+		}
 		return nil, fmt.Errorf("rag-engine devolvió un status no esperado: %d", resp.StatusCode)
+	}
+	if c.metrics != nil {
+		c.metrics.DependencyTotal.WithLabelValues("rag-engine", "success").Inc()
 	}
 
 	var searchResp pythonSearchResponse

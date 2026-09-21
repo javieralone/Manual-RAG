@@ -1,11 +1,18 @@
+import time
 from typing import List
+from app.observability import embedding_duration
 from sentence_transformers import SentenceTransformer
 from app.core.ports.embedding_port import EmbeddingPort
 
 class BGEEmbeddingAdapter(EmbeddingPort):
     def __init__(self, model_name: str = "BAAI/bge-m3"):
-        print(f"Cargando modelo de embeddings: {model_name}...")
+        import logging
+        logging.getLogger(__name__).info("embedding_model_loading", extra={"model": model_name})
         self._model = SentenceTransformer(model_name)
 
     def generate_embedding(self, text: str) -> List[float]:
-        return self._model.encode(text).tolist()
+        started = time.perf_counter()
+        try:
+            return self._model.encode(text).tolist()
+        finally:
+            embedding_duration.observe(time.perf_counter() - started)

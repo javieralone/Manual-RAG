@@ -4,3 +4,8 @@ qdrant-client
 fastapi
 uvicorn
 mcp<2
+prometheus-client
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-exporter-otlp

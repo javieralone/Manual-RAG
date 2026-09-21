@@ -1,0 +1,15 @@
+{
+  "title": "Manual-RAG Overview",
+  "uid": "manual-rag-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {"type":"timeseries","title":"API Request Rate","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum(rate(api_go_http_requests_total[5m]))","legendFormat":"requests/s"}]},
+    {"type":"timeseries","title":"API p95 Latency","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(api_go_http_request_duration_seconds_bucket[5m])))","legendFormat":"p95"}]},
+    {"type":"timeseries","title":"Dependency Errors","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"sum by (dependency) (rate(api_go_dependency_requests_total{result=\"error\"}[5m]))","legendFormat":"{{dependency}}"}]},
+    {"type":"timeseries","title":"RAG Retrieval Latency","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(rag_engine_retrieval_duration_seconds_bucket[5m])))","legendFormat":"p95"}]},
+    {"type":"stat","title":"Readiness","gridPos":{"h":5,"w":6,"x":0,"y":16},"targets":[{"expr":"api_go_readiness"}]},
+    {"type":"stat","title":"RAG Readiness","gridPos":{"h":5,"w":6,"x":6,"y":16},"targets":[{"expr":"rag_engine_readiness"}]}
+  ]
+}

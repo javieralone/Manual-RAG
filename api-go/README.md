@@ -124,6 +124,15 @@ Endpoint de verificación de estado destinado a Docker y orquestadores.
 {
   "status": "UP"
 }
+```
+
+### GET `/ready`
+
+Comprueba que `rag-engine` y Ollama están disponibles para atender consultas. Devuelve `503` si alguna dependencia no está lista.
+
+### GET `/metrics`
+
+Expone métricas Prometheus del gateway: peticiones, latencias, errores, autenticación, dependencias, generación y concurrencia.
 
 ## Autenticacion y autorizacion
 
@@ -176,9 +185,14 @@ Content-Type: application/json
 ```
 
 Los roles `admin`, `operator` y `user` pueden consultar. La ausencia de token devuelve `401`; un token valido sin rol permitido devuelve `403`.
-🛠️ Compilación y Ejecución
-Requisitos
-Docker & Docker Compose
+
+## Observabilidad
+
+El gateway genera logs JSON y trazas OpenTelemetry OTLP. El trace context W3C se propaga hacia `rag-engine` y Ollama. El stack completo está documentado en [`observability/README.md`](../observability/README.md).
+
+## Compilacion y ejecucion
+
+Requisitos: Docker y Docker Compose.
 
 ### Ejecutar con Docker Compose
 
@@ -196,5 +210,4 @@ cd api-go
 go mod tidy
 go build -v ./...
 go test ./...
-
----
+```

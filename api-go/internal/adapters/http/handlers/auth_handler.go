@@ -3,23 +3,25 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
+	"api-go/internal/adapters/observability"
 	"api-go/internal/core/domain"
 	"api-go/internal/core/ports"
 )
 
 type AuthHandler struct {
 	service ports.AuthService
-	logger  *log.Logger
+	logger  *slog.Logger
+	metrics *observability.Metrics
 }
 
-func NewAuthHandler(service ports.AuthService, logger *log.Logger) *AuthHandler {
+func NewAuthHandler(service ports.AuthService, logger *slog.Logger, metrics *observability.Metrics) *AuthHandler {
 	if logger == nil {
-		logger = log.Default()
+		logger = slog.Default()
 	}
-	return &AuthHandler{service: service, logger: logger}
+	return &AuthHandler{service: service, logger: logger, metrics: metrics}
 }
 
 type loginRequest struct {
@@ -40,9 +42,15 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	pair, err := h.service.Login(r.Context(), request.Username, request.Password)
 	if err != nil {
-		h.logger.Printf("fallo de autenticación desde %s", r.RemoteAddr)
+		if h.metrics != nil {
+			h.metrics.AuthTotal.WithLabelValues("login", "failure").Inc()
+		}
+		h.logger.Warn("authentication_failed", "remote_addr", r.RemoteAddr)
 		writeAuthError(w, http.StatusUnauthorized, "credenciales inválidas")
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.AuthTotal.WithLabelValues("login", "success").Inc()
 	}
 	writeAuthJSON(w, http.StatusOK, pair)
 }
@@ -56,13 +64,19 @@ func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	pair, err := h.service.Refresh(r.Context(), request.RefreshToken)
 	if err != nil {
-		h.logger.Printf("fallo de refresh token desde %s", r.RemoteAddr)
+		if h.metrics != nil {
+			h.metrics.AuthTotal.WithLabelValues("refresh", "failure").Inc()
+		}
+		h.logger.Warn("refresh_token_failed", "remote_addr", r.RemoteAddr)
 		status := http.StatusUnauthorized
 		if !errors.Is(err, domain.ErrInvalidToken) {
 			status = http.StatusInternalServerError
 		}
 		writeAuthError(w, status, "refresh token inválido o expirado")
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.AuthTotal.WithLabelValues("refresh", "success").Inc()
 	}
 	writeAuthJSON(w, http.StatusOK, pair)
 }

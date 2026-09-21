@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"api-go/internal/adapters/observability"
 	"api-go/internal/core/domain"
 )
 
@@ -15,13 +17,15 @@ type OllamaClient struct {
 	baseURL    string
 	modelName  string
 	httpClient *http.Client
+	metrics    *observability.Metrics
 }
 
-func NewOllamaClient(baseURL string, modelName string, httpClient *http.Client) *OllamaClient {
+func NewOllamaClient(baseURL string, modelName string, httpClient *http.Client, metrics *observability.Metrics) *OllamaClient {
 	return &OllamaClient{
 		baseURL:    baseURL,
 		modelName:  modelName,
 		httpClient: httpClient,
+		metrics:    metrics,
 	}
 }
 
@@ -33,7 +37,8 @@ type ollamaRequest struct {
 }
 
 type ollamaResponse struct {
-	Response string `json:"response"`
+	Response  string `json:"response"`
+	EvalCount int    `json:"eval_count"`
 }
 
 func (c *OllamaClient) GenerateAnswer(ctx context.Context, question string, chunks []domain.DocumentChunk) (string, error) {
@@ -69,21 +74,41 @@ func (c *OllamaClient) GenerateAnswer(ctx context.Context, question string, chun
 		return "", fmt.Errorf("error creando request para Ollama: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	observability.InjectTraceContext(ctx, req.Header)
 
 	// 3. Ejecutar la llamada
+	started := time.Now()
 	resp, err := c.httpClient.Do(req)
+	if c.metrics != nil {
+		c.metrics.DependencyDuration.WithLabelValues("ollama").Observe(time.Since(started).Seconds())
+	}
 	if err != nil {
+		if c.metrics != nil {
+			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
+		}
 		return "", fmt.Errorf("error de conexión con Ollama en %s: %w", c.baseURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if c.metrics != nil {
+			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
+		}
 		return "", fmt.Errorf("Ollama devolvió un estado no esperado: %d", resp.StatusCode)
+	}
+	if c.metrics != nil {
+		c.metrics.DependencyTotal.WithLabelValues("ollama", "success").Inc()
 	}
 
 	var ollamaResp ollamaResponse
 	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
 		return "", fmt.Errorf("error deserializando respuesta de Ollama: %w", err)
+	}
+	if c.metrics != nil {
+		elapsed := time.Since(started).Seconds()
+		c.metrics.GenerationDuration.Observe(elapsed)
+		c.metrics.TimeToFirstToken.Observe(elapsed)
+		c.metrics.GeneratedTokens.Observe(float64(ollamaResp.EvalCount))
 	}
 
 	return strings.TrimSpace(ollamaResp.Response), nil

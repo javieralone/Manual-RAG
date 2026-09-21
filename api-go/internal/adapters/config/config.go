@@ -19,6 +19,7 @@ type Config struct {
 	HTTPClientTimeout time.Duration
 	RequestTimeout    time.Duration
 	WorkerLimit       int
+	OTLPEndpoint      string
 	Auth              AuthConfig
 }
 
@@ -78,6 +79,7 @@ func Load() (Config, error) {
 		HTTPClientTimeout: 30 * time.Second,
 		RequestTimeout:    60 * time.Second,
 		WorkerLimit:       workerLimit,
+		OTLPEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Auth: AuthConfig{
 			JWTSecret:         accessSecret,
 			RefreshSecret:     refreshSecret,

@@ -517,9 +517,7 @@ El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar
 
 ## 🛣️ Próximas mejoras
 
-- Añadir autenticación para la API.
 - Incorporar streaming de respuestas.
-- Añadir métricas y observabilidad.
 - Crear una interfaz web para realizar consultas.
 - Añadir evaluación automática de la calidad de las respuestas.
 - Incorporar filtros por documento, capítulo o sección.
@@ -527,6 +525,35 @@ El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar
 - Mejorar el procesamiento OCR de manuales escaneados.
 - Añadir pruebas de integración con Docker Compose.
 - Incorporar una cola de trabajos para la indexación de documentos.
+
+---
+
+## 📈 Observabilidad
+
+El sistema incluye observabilidad end-to-end:
+
+- `/health`, `/ready` y `/metrics` en `api-go` y `rag-engine`.
+- Métricas Prometheus de tráfico, latencias, errores, autenticación, concurrencia, retrieval, embeddings, Qdrant y Ollama.
+- Logs JSON en Go y Python.
+- Trazas OpenTelemetry OTLP con destino Tempo y propagación W3C entre gateway, RAG engine y Ollama.
+- Stack Docker Compose con Prometheus, Grafana, Loki y Tempo.
+- Dashboard provisionado en `observability/grafana/dashboards/`.
+- Alertas base en `observability/prometheus/alerts.yml` para disponibilidad, latencia, errores, Ollama y Qdrant.
+
+URLs locales:
+
+| Servicio | URL |
+|---|---|
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
+| Loki | `http://localhost:3100` |
+| Tempo | `http://localhost:3200` |
+
+Para levantar todo:
+
+```bash
+docker compose up -d --build
+```
 
 ---
 
