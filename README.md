@@ -649,14 +649,27 @@ El directorio `qdrant_storage/` se monta directamente desde el host, por lo que 
 
 ## 🛣️ Próximas mejoras
 
-- Incorporar streaming de respuestas.
-- Crear una interfaz web para realizar consultas.
-- Añadir evaluación automática de la calidad de las respuestas.
-- Incorporar filtros por documento, capítulo o sección.
-- Añadir soporte para múltiples colecciones.
-- Mejorar el procesamiento OCR de manuales escaneados.
-- Añadir pruebas de integración con Docker Compose.
-- Incorporar una cola de trabajos para la indexación de documentos.
+El roadmap del proyecto puede enfocarse en tres grandes líneas: mejor experiencia de usuario, escalabilidad y calidad del RAG.
+
+### Experiencia y acceso
+
+- Desarrollar una interfaz web para consultar el sistema sin usar curl o clientes HTTP.
+- Añadir paneles de administración para revisar consultas, contexto recuperado y métricas de uso.
+- Mejorar la experiencia de autenticación y autorización para múltiples roles y permisos.
+
+### Calidad del RAG
+
+- Añadir evaluación automática de calidad de respuestas mediante groundedness, relevancia y precisión del contexto.
+- Incorporar filtros por documento, capítulo, sección o tipo de contenido.
+- Soportar múltiples colecciones o índices por familia de manuales.
+- Mejorar la extracción de texto OCR para documentos escaneados o con baja calidad.
+
+### Operabilidad y escalabilidad
+
+- Añadir una cola de trabajos para indexación asíncrona y procesamiento por lotes.
+- Extender las pruebas de integración con Docker Compose para validar flujos completos en entorno real.
+- Mejorar la observabilidad con dashboards más específicos por consulta, tiempo de recuperación y latencia de Ollama.
+- Explorar estrategias de caché y reindexación incremental para reducir tiempos de respuesta y carga.
 
 ---
 

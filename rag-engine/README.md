@@ -218,6 +218,27 @@ curl -X POST http://localhost:8000/search \
 
 ---
 
+# ✅ Evaluación de calidad del RAG
+
+`scripts/evaluate_rag.py` ejecuta un conjunto de consultas de referencia (`eval/golden_dataset.json`) contra Qdrant y Ollama, y mide:
+
+- `context_precision`: fracción de fragmentos recuperados que provienen de una fuente esperada.
+- `context_recall`: fracción de fuentes esperadas encontradas entre los resultados.
+- `groundedness`: cobertura de palabras clave esperadas en la respuesta generada (o en el contexto, si se omite la generación).
+- `latency_seconds`: tiempo de recuperación por consulta.
+
+Los thresholds de aprobación se definen en `eval/thresholds.json`. El valor por defecto de `max_latency_seconds` está calibrado para hardware local de desarrollo (sin GPU); en CI o producción conviene bajarlo.
+
+```bash
+cd rag-engine
+python scripts/evaluate_rag.py --skip-generation   # solo recuperación, sin Ollama
+python scripts/evaluate_rag.py                     # incluye generación de respuesta con Ollama
+```
+
+El runner guarda un reporte JSON en `output/eval_report_<timestamp>.json` y termina con código de salida distinto de cero si algún caso no supera los thresholds, para poder integrarlo en la pipeline de validación.
+
+---
+
 # 🐳 Servicios Docker
 
 ## Qdrant

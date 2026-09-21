@@ -1,0 +1,23 @@
+[
+  {
+    "id": "motor-ubicacion",
+    "query": "¿Dónde está ubicado el número de motor en el vehículo?",
+    "expected_sources": ["0-lubricacion-mantenimiento.pdf"],
+    "expected_keywords": ["número de motor", "bloque de cilindros"],
+    "top_k": 5
+  },
+  {
+    "id": "motor-especificaciones",
+    "query": "¿Cuántos cilindros tiene el motor y cómo están dispuestos?",
+    "expected_sources": ["0-lubricacion-mantenimiento.pdf"],
+    "expected_keywords": ["en línea", "cilindrada"],
+    "top_k": 5
+  },
+  {
+    "id": "manual-alcance",
+    "query": "¿A qué automóviles se refiere este manual de reparaciones?",
+    "expected_sources": ["0-lubricacion-mantenimiento.pdf"],
+    "expected_keywords": ["VALIANT", "Reparación"],
+    "top_k": 5
+  }
+]
