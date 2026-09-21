@@ -75,14 +75,13 @@ Manual-RAG/
 │   │   │   ├── domain/             # Entidades del dominio
 │   │   │   ├── ports/              # Interfaces y contratos
 │   │   │   └── services/           # Casos de uso RAG
-│   │   └── infrastructure/         # Configuración e infraestructura
+│   │   ├── main.py                  # API interna con FastAPI
+│   │   └── mcp_server.py            # Servidor MCP
 │   ├── scripts/
 │   │   ├── index_manual.py         # Indexación de manuales
 │   │   ├── ocr_manual.py           # Procesamiento OCR
 │   │   ├── query_rag.py            # Consultas al sistema RAG
 │   │   └── upload_to_qdrant.py     # Carga de vectores
-│   ├── main.py                     # API interna con FastAPI
-│   ├── mcp_server.py               # Servidor MCP
 │   ├── requirements.txt
 │   └── Dockerfile
 │
@@ -205,7 +204,7 @@ Respuesta:
 
 ### `POST /api/v1/query`
 
-Realiza una consulta sobre los manuales indexados.
+Realiza una consulta autenticada sobre los manuales indexados. Requiere un token de acceso en la cabecera `Authorization`.
 
 Petición:
 
@@ -235,6 +234,7 @@ Ejemplo utilizando `curl`:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
@@ -242,6 +242,26 @@ curl -X POST http://localhost:8080/api/v1/query \
 ```
 
 > Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
+
+### Autenticación
+
+Obtén un par de tokens con las credenciales configuradas para el usuario administrador:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<password>"}'
+```
+
+Renueva el acceso cuando expire el token:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh_token>"}'
+```
+
+Los endpoints `/health`, `/ready` y `/metrics` son públicos. La consulta requiere `Bearer <access_token>`.
 
 ---
 
@@ -325,7 +345,7 @@ Cuando llega una pregunta al sistema:
 El proyecto incluye un servidor MCP en:
 
 ```text
-rag-engine/mcp_server.py
+rag-engine/app/mcp_server.py
 ```
 
 La configuración para clientes compatibles se encuentra en:
@@ -381,10 +401,16 @@ Instala las dependencias:
 pip install -r requirements.txt
 ```
 
-Inicia el servicio:
+Inicia el servicio FastAPI:
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+El servidor MCP se inicia por separado en el puerto `8001`:
+
+```bash
+python -m app.mcp_server
 ```
 
 ### Ejecutar el API Gateway en Go
@@ -411,24 +437,32 @@ go test ./...
 | `api-go` | API Gateway y punto de entrada público |
 | `rag-engine` | Recuperación semántica y API interna |
 | `qdrant` | Base de datos vectorial |
-| `ollama` | Generación de respuestas mediante un LLM |
-| `manual-rag` | Servidor MCP para agentes |
+| `mcp-server` | Servidor MCP para agentes |
+| Ollama en el host | Generación de respuestas mediante un LLM |
+| `prometheus`, `grafana`, `loki`, `tempo` | Métricas, paneles, logs y trazas |
 
 ---
 
 ## 🔐 Variables de configuración
 
-La configuración puede variar según el entorno. Algunos valores habituales son:
+La configuración puede variar según el entorno. Docker Compose utiliza estas variables principales:
 
 ```env
-RAG_ENGINE_URL=http://rag-engine:8001
-OLLAMA_URL=http://ollama:11434
-QDRANT_URL=http://qdrant:6333
-QDRANT_COLLECTION=manuals
-EMBEDDING_MODEL=BAAI/bge-m3
+PYTHON_ENGINE_URL=http://rag-engine:8000
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=qwen2.5:1.5b
+AUTH_JWT_SECRET=<secreto>
+AUTH_REFRESH_SECRET=<secreto>
+AUTH_ADMIN_USERNAME=admin
+AUTH_ADMIN_PASSWORD_HASH=<hash-bcrypt>
+WORKER_LIMIT=2
+HTTP_CLIENT_TIMEOUT=5m
+REQUEST_TIMEOUT=5m
 ```
 
-No incluyas claves privadas, tokens ni credenciales directamente en el repositorio.
+El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, la colección `manuales_tecnicos` y el modelo de embeddings `BAAI/bge-m3`. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
+
+No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
 Para desarrollo local puedes utilizar un archivo `.env`:
 
@@ -437,6 +471,19 @@ cp .env.example .env
 ```
 
 Si el proyecto no incluye `.env.example`, crea el archivo `.env` siguiendo las variables definidas en `docker-compose.yml`.
+
+### Puertos
+
+| Servicio | Puerto local |
+|---|---:|
+| API Gateway | `8080` |
+| RAG Engine | `8000` |
+| MCP | `8001` |
+| Qdrant | `6333` (HTTP), `6334` (gRPC) |
+| Grafana | `3000` |
+| Prometheus | `9090` |
+| Loki | `3100` |
+| Tempo | `3200`, OTLP `4317`/`4318` |
 
 ---
 
@@ -498,7 +545,7 @@ output/
 qdrant_storage/
 ```
 
-El directorio `qdrant_storage/` debe persistirse mediante un volumen para evitar perder los vectores al reiniciar los contenedores.
+El directorio `qdrant_storage/` se monta directamente desde el host, por lo que conserva los vectores al reiniciar los contenedores. `docker compose down -v` elimina los volúmenes nombrados, pero no borra ese directorio; elimínalo manualmente solo si quieres reconstruir el índice.
 
 ---
 
