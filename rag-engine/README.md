@@ -33,7 +33,7 @@ Dependency Inversion Principle (DIP): El caso de uso (RAGService) no depende de 
 
 Gestión de Recursos (RAM & CPU Optimization):
 
-Patrón Singleton: El modelo de embeddings (all-MiniLM-L6-v2) y la conexión a Qdrant se instancian una sola vez al arrancar la aplicación y se inyectan a través del contenedor de dependencias de FastAPI. Esto evita re-cargar el modelo PyTorch en memoria durante cada petición HTTP.
+Patrón Singleton: El modelo de embeddings (paraphrase-multilingual-MiniLM-L12-v2) y la conexión a Qdrant se instancian una sola vez al arrancar la aplicación y se inyectan a través del contenedor de dependencias de FastAPI. Esto evita re-cargar el modelo PyTorch en memoria durante cada petición HTTP.
 
 Eficiencia en Entornos Reducidos: Seleccionado específicamente para funcionar de manera ágil bajo límites estrictos de hardware (8GB RAM / CPU local).
 

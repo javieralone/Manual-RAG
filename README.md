@@ -25,3 +25,5 @@ Manual-RAG/
 ├── .gitignore
 ├── README.md
 └── docker-compose.yml          # Orquestador global[cite: 1]
+
+.\venv\Scripts\activate

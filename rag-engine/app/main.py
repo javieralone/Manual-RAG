@@ -9,8 +9,12 @@ from app.services.rag_service import RAGService
 app = FastAPI(title="RAG Engine Python", version="1.0.0")
 
 # --- CONTENEDORES DE DEPENDENCIAS (Singletons para evitar recargar el modelo en RAM) ---
-_embedding_adapter = SentenceTransformerAdapter(model_name="all-MiniLM-L6-v2")
-_vector_store_adapter = QdrantAdapter(host="qdrant", port=6333)
+_embedding_adapter = SentenceTransformerAdapter(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+_vector_store_adapter = QdrantAdapter(
+    host="qdrant", 
+    port=6333, 
+    collection_name="manuales_tecnicos"
+)
 
 def get_rag_service() -> RAGService:
     return RAGService(

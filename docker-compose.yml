@@ -19,7 +19,7 @@ services:
     build:
       context: ./rag-engine
       dockerfile: Dockerfile
-    container_name: rag_python_engine
+    container_name: rag_engine
     ports:
       - "8000:8000"
     environment:
