@@ -98,9 +98,14 @@ Procesa la pregunta del usuario, recupera contexto desde `rag-engine` y genera u
 
 ```json
 {
-  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
+  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
+  "document_id": "0-lubricacion-mantenimiento",
+  "chapter": "2",
+  "section": "2.1"
 }
 ```
+
+Los campos `document_id`, `chapter` y `section` son opcionales y se combinan con AND cuando se envían.
 
 #### Response Body (200 OK)
 

@@ -10,6 +10,16 @@ type DocumentChunk struct {
 	Metadata map[string]interface{} `json:"metadata"`
 }
 
+type QueryFilters struct {
+	DocumentID string `json:"document_id,omitempty"`
+	Chapter    string `json:"chapter,omitempty"`
+	Section    string `json:"section,omitempty"`
+}
+
+func (f QueryFilters) IsEmpty() bool {
+	return f.DocumentID == "" && f.Chapter == "" && f.Section == ""
+}
+
 type QueryResponse struct {
 	Question string          `json:"question"`
 	Answer   string          `json:"answer"`

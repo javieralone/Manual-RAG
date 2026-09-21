@@ -162,9 +162,14 @@ POST /search
 ```json
 {
   "query": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
-  "top_k": 3
+  "top_k": 3,
+  "document_id": "0-lubricacion-mantenimiento",
+  "chapter": "2",
+  "section": "2.1"
 }
 ```
+
+Los filtros `document_id`, `chapter` y `section` son opcionales y se aplican conjuntamente sobre el payload de Qdrant.
 
 ### Response
 
@@ -175,7 +180,12 @@ POST /search
       "page": 12,
       "source": "manual_tecnico.pdf",
       "text": "El mantenimiento del sistema de lubricación requiere...",
-      "score": 0.895
+      "score": 0.895,
+      "metadata": {
+        "document_id": "0-lubricacion-mantenimiento",
+        "chapter": "2",
+        "section": "2.1"
+      }
     }
   ]
 }
@@ -296,3 +306,5 @@ LLM
    ▼
 Respuesta final
 ```
+
+Para que los filtros funcionen sobre datos existentes, hay que volver a ejecutar `index_manual.py` y `upload_to_qdrant.py` después de cambiar los metadatos.

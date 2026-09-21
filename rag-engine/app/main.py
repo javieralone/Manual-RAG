@@ -81,7 +81,20 @@ def search_chunks(
         raise HTTPException(status_code=400, detail="La consulta 'query' no puede estar vacía.")
 
     try:
-        return rag_service.execute_search(query_text=request.query, top_k=request.top_k)
+        filters = {
+            key: value
+            for key, value in {
+                "document_id": request.document_id,
+                "chapter": request.chapter,
+                "section": request.section,
+            }.items()
+            if value
+        }
+        return rag_service.execute_search(
+            query_text=request.query,
+            top_k=request.top_k,
+            filters=filters,
+        )
     except Exception as e:
         errors_total.labels(component="search").inc()
         logging.getLogger(__name__).exception("rag_search_failed")

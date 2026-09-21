@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from qdrant_client.models import Distance, PayloadSchemaType, PointStruct, VectorParams
 
 # 1. Calcular dinámicamente la raíz del proyecto (2 niveles arriba de 'rag-engine/scripts/')
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -54,16 +54,31 @@ for idx, item in enumerate(chunks):
     vector = model.encode(item["text"]).tolist()
     
     # Preparar el punto para Qdrant
+    metadata = item.get("metadata", {})
+    payload = {
+        "text": item["text"],
+        "page": metadata.get("page", 0),
+        "source": metadata.get("source", "Desconocido"),
+        "document_id": metadata.get("document_id", ""),
+    }
+    for field in ("chapter", "section"):
+        if metadata.get(field):
+            payload[field] = metadata[field]
+
     points.append(
         PointStruct(
             id=idx,
             vector=vector,
-            payload={
-                "text": item["text"],
-                "page": item["metadata"]["page"],
-                "source": item["metadata"]["source"]
-            }
+            payload=payload,
         )
+    )
+
+# Keyword indexes keep metadata filters efficient as the collection grows.
+for field in ("document_id", "chapter", "section"):
+    client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name=field,
+        field_schema=PayloadSchemaType.KEYWORD,
     )
 
 # 7. Subir a Qdrant
