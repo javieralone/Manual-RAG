@@ -3,32 +3,30 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
-	"api-go/internal/handlers"
-	"api-go/internal/services"
+	adaptersHTTP "api-go/internal/adapters/http"
+	"api-go/internal/adapters/http/handlers"
+	"api-go/internal/adapters/clients"
+	"api-go/internal/core/services"
 )
 
 func main() {
-	// 1. Inicializar el servicio RAG (se comunica con FastAPI en :8000 y Ollama en :11434)
-	ragService := services.NewRAGService()
+	httpClient := &http.Client{Timeout: 300 * time.Second}
 
-	// 2. Inicializar el Handler
-	queryHandler := handlers.NewHandler(ragService)
+	// 1. Adaptadores
+	ragAdapter := clients.NewPythonRAGClient("http://rag-engine:8000", httpClient)
+	ollamaAdapter := clients.NewOllamaClient("http://host.docker.internal:11434", "qwen2.5:1.5b", httpClient)
 
-	// 3. Registrar los Endpoints
-	http.HandleFunc("/api/v1/query", queryHandler.HandleQuery)
+	// 2. Core Service
+	queryUseCase := services.NewQueryOrchestrator(ragAdapter, ollamaAdapter)
 
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("API Go Gateway funcionando ok."))
-	})
+	// 3. Handler & Router HTTP
+	queryHandler := handlers.NewQueryHandler(queryUseCase)
+	router := adaptersHTTP.NewRouter(queryHandler)
 
-	log.Println("==================================================")
-	log.Println("🚀 Go API Gateway corriendo en http://localhost:8080")
-	log.Println("📌 Endpoint RAG: POST http://localhost:8080/api/v1/query")
-	log.Println("==================================================")
-
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Error al iniciar el servidor Go: %v", err)
+	log.Println("API Gateway corriendo en :8080 bajo Clean Architecture...")
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		log.Fatalf("Error iniciando servidor: %v", err)
 	}
 }
