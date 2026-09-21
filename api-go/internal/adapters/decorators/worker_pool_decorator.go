@@ -11,14 +11,20 @@ import (
 
 var ErrServerBusy = errors.New("el servidor alcanzó el límite de peticiones simultáneas, intenta en unos momentos")
 
+// QueryService agrupa los casos de uso normal y en streaming para compartir un único pool de workers.
+type QueryService interface {
+	ports.QueryUseCase
+	ports.QueryStreamUseCase
+}
+
 type WorkerPoolUseCaseDecorator struct {
-	wrapped    ports.QueryUseCase
+	wrapped    QueryService
 	workers    chan struct{}
 	inFlight   prometheus.Gauge
 	rejections prometheus.Counter
 }
 
-func NewWorkerPoolUseCaseDecorator(useCase ports.QueryUseCase, maxWorkers int, inFlight prometheus.Gauge, rejections prometheus.Counter) *WorkerPoolUseCaseDecorator {
+func NewWorkerPoolUseCaseDecorator(useCase QueryService, maxWorkers int, inFlight prometheus.Gauge, rejections prometheus.Counter) *WorkerPoolUseCaseDecorator {
 	return &WorkerPoolUseCaseDecorator{
 		wrapped:    useCase,
 		workers:    make(chan struct{}, maxWorkers),
@@ -46,4 +52,26 @@ func (d *WorkerPoolUseCaseDecorator) ExecuteQuery(ctx context.Context, question 
 	}
 
 	return d.wrapped.ExecuteQuery(ctx, question)
+}
+
+// ExecuteQueryStream reutiliza el mismo pool de workers; el slot se mantiene ocupado durante todo
+// el streaming porque la llamada es síncrona hasta que el evento "complete"/"error" se emite.
+func (d *WorkerPoolUseCaseDecorator) ExecuteQueryStream(ctx context.Context, question string, sink ports.StreamSink) error {
+	select {
+	case d.workers <- struct{}{}:
+		defer func() { <-d.workers }()
+		if d.inFlight != nil {
+			d.inFlight.Inc()
+			defer d.inFlight.Dec()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		if d.rejections != nil {
+			d.rejections.Inc()
+		}
+		return sink.SendError(ErrServerBusy)
+	}
+
+	return d.wrapped.ExecuteQueryStream(ctx, question, sink)
 }

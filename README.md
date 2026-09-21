@@ -243,6 +243,17 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 > Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
 
+### `POST /query/stream`
+
+Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`api-go/README.md`](api-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
+
+```bash
+curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
+```
+
 ### Autenticación
 
 Obtén un par de tokens con las credenciales configuradas para el usuario administrador:

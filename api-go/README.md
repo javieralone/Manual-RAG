@@ -114,7 +114,131 @@ Procesa la pregunta del usuario, recupera contexto desde `rag-engine` y genera u
 
 ---
 
-### GET `/health`
+### POST `/query/stream` — Streaming en tiempo real (SSE)
+
+Misma lógica que `/api/v1/query` (retrieval + generación) pero reenvía la respuesta de Ollama token por token mediante **Server-Sent Events**, sin reconstruir la respuesta completa en el Gateway. Requiere el mismo `Bearer <access_token>` que `/api/v1/query`.
+
+```mermaid
+sequenceDiagram
+    participant Cliente
+    participant Gateway as API Gateway (Go)
+    participant RAG as rag-engine (Python)
+    participant Ollama
+
+    Cliente->>Gateway: POST /query/stream (question)
+    Gateway->>RAG: POST /search (retrieval)
+    RAG-->>Gateway: chunks
+    Gateway-->>Cliente: event: metadata (context)
+    Gateway->>Ollama: POST /api/generate (stream=true)
+    loop por cada línea NDJSON
+        Ollama-->>Gateway: {"response": "...", "done": false}
+        Gateway-->>Cliente: event: token
+    end
+    Ollama-->>Gateway: {"done": true, "eval_count": N}
+    Gateway-->>Cliente: event: complete (stats)
+    Note over Gateway,Cliente: en error: event: error (en cualquier punto, termina el stream)
+```
+
+#### Request Body
+
+Igual que `/api/v1/query`:
+
+```json
+{
+  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
+}
+```
+
+#### Eventos SSE
+
+El cuerpo de la respuesta usa `Content-Type: text/event-stream`. Cada evento sigue el formato `event: <tipo>\ndata: <json>\n\n`:
+
+| Evento | Cuándo se emite | Payload |
+|---|---|---|
+| `metadata` | Una vez, tras el retrieval, antes de generar | `{"context": [{"text": "...", "score": 0.89, "metadata": {}}]}` |
+| `token` | Una vez por fragmento de texto recibido de Ollama | `{"text": "fragmento"}` |
+| `complete` | Una vez, al finalizar correctamente | `{"total_duration_ms": 1234, "time_to_first_token_ms": 210, "token_count": 42}` |
+| `error` | En cualquier fallo (retrieval, generación, sobrecarga); termina el stream | `{"error": "mensaje"}` |
+
+Ejemplo de flujo:
+
+```text
+event: metadata
+data: {"context":[{"text":"...","score":0.89,"metadata":{}}]}
+
+event: token
+data: {"text":"El "}
+
+event: token
+data: {"text":"mantenimiento "}
+
+event: complete
+data: {"total_duration_ms":1834,"time_to_first_token_ms":210,"token_count":42}
+```
+
+#### Ejemplo con `curl`
+
+```bash
+curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
+```
+
+`-N`/`--no-buffer` es necesario para ver los eventos a medida que llegan en vez de al final.
+
+#### Ejemplo de consumo desde JavaScript
+
+El endpoint no usa `EventSource` nativo (requiere `GET` sin headers personalizados); se consume con `fetch` y un `ReadableStream`:
+
+```javascript
+const response = await fetch("http://localhost:8080/query/stream", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ question: "¿Cómo se realiza el mantenimiento...?" }),
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let buffer = "";
+
+while (true) {
+  const { value, done } = await reader.read();
+  if (done) break;
+  buffer += decoder.decode(value, { stream: true });
+
+  let frame;
+  while ((frame = buffer.indexOf("\n\n")) !== -1) {
+    const rawEvent = buffer.slice(0, frame);
+    buffer = buffer.slice(frame + 2);
+    const [eventLine, dataLine] = rawEvent.split("\n");
+    const eventType = eventLine.replace("event: ", "");
+    const payload = JSON.parse(dataLine.replace("data: ", ""));
+    console.log(eventType, payload); // "metadata" | "token" | "complete" | "error"
+  }
+}
+```
+
+#### Cancelación, timeout y backpressure
+
+- **Cancelación**: si el cliente cierra la conexión (p. ej. `AbortController.abort()`, cerrar la pestaña), `net/http` cancela automáticamente el `context.Context` de la petición; la siguiente escritura hacia Ollama o hacia el cliente falla y el stream se detiene sin fugas de goroutines ni de slots del worker pool.
+- **Timeout**: `REQUEST_TIMEOUT` (por defecto `5m`) y `HTTP_CLIENT_TIMEOUT` acotan la duración total del stream igual que en `/api/v1/query`; si expiran a mitad de la generación, se emite `event: error` y la conexión se cierra.
+- **Backpressure**: el Gateway no acumula la respuesta en memoria — cada token se escribe y se hace *flush* inmediatamente; si el cliente lee más lento de lo que Ollama genera, la propia escritura HTTP se bloquea (backpressure a nivel de TCP), frenando naturalmente la lectura desde Ollama.
+- **Errores**: dado que las cabeceras HTTP ya se confirmaron en `200 OK` al emitir el primer evento, los errores posteriores al inicio del stream se comunican únicamente mediante `event: error`, nunca como un código de estado HTTP distinto. Errores previos al primer evento (JSON inválido, `rag-engine` caído antes de generar) sí devuelven un código HTTP de error normal.
+
+#### Métricas relevantes
+
+- `api_go_time_to_first_token_seconds`: latencia real hasta el primer token (antes idéntica a `api_go_generation_duration_seconds` porque no había streaming).
+- `api_go_generation_duration_seconds`: duración total de la generación en Ollama.
+- `api_go_http_request_duration_seconds`: duración total de la petición HTTP, incluye todo el streaming.
+- `api_go_worker_pool_in_flight` / `api_go_worker_pool_rejections_total`: el pool de workers se comparte con `/api/v1/query`; una petición en streaming ocupa un slot durante toda la duración del stream.
+
+---
+
+
 
 Endpoint de verificación de estado destinado a Docker y orquestadores.
 

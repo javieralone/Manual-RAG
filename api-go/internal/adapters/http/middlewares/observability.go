@@ -24,6 +24,13 @@ func (w *statusWriter) Write(body []byte) (int, error) {
 	return w.ResponseWriter.Write(body)
 }
 
+// Flush permite que las respuestas en streaming (SSE) atraviesen este middleware.
+func (w *statusWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func MetricsMiddleware(metrics *observability.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

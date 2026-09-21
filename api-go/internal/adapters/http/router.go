@@ -14,6 +14,10 @@ func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHa
 	// Registro de endpoints
 	protectedQuery := authenticate(authorize(http.HandlerFunc(queryHandler.HandleQuery)))
 	mux.Handle("/api/v1/query", protectedQuery)
+
+	protectedQueryStream := authenticate(authorize(http.HandlerFunc(queryHandler.HandleQueryStream)))
+	mux.Handle("/query/stream", protectedQueryStream)
+
 	mux.HandleFunc("/api/v1/auth/login", authHandler.HandleLogin)
 	mux.HandleFunc("/api/v1/auth/refresh", authHandler.HandleRefresh)
 
