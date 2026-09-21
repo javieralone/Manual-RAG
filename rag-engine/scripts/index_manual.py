@@ -38,6 +38,7 @@ for item in pages_data:
     text = item.get("text", "")
     source = item.get("source", "0-lubricacion-mantenimiento.pdf")
     document_id = item.get("document_id", Path(source).stem)
+    part = item.get("part", 1)
     chapter = item.get("chapter")
     section = item.get("section")
     
@@ -51,6 +52,7 @@ for item in pages_data:
             "page": page_num,
             "source": source,
             "document_id": document_id,
+            "part": part,
         }
         if chapter:
             metadata["chapter"] = chapter

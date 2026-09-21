@@ -394,15 +394,54 @@ Los scripts relacionados con este proceso se encuentran en:
 rag-engine/scripts/
 ```
 
-Ejemplos:
+La ingesta usa estas carpetas:
 
-```bash
-python rag-engine/scripts/ocr_manual.py
-python rag-engine/scripts/index_manual.py
-python rag-engine/scripts/upload_to_qdrant.py
+```text
+documents/
+├── new/        # PDFs pendientes
+├── reading/    # PDF en procesamiento
+└── completed/  # PDFs procesados correctamente
 ```
 
-Los nombres y parámetros exactos pueden variar según la configuración del proyecto.
+Para manuales divididos en varias partes, usa el mismo identificador y numera cada PDF:
+
+```text
+documents/new/manual-reparaciones-valiant__parte-001.pdf
+documents/new/manual-reparaciones-valiant__parte-002.pdf
+```
+
+Ejecuta el orquestador desde la raíz del proyecto:
+
+```bash
+python rag-engine/scripts/process_manual.py
+```
+
+`process_manual.py` toma todos los PDFs de `documents/new`, mueve cada uno a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si las tres etapas terminan correctamente. Si falla, vuelve a `new` y registra el error en `logs/ingestion.log`. Un lock impide ejecutar dos ingestas simultáneas.
+
+Los nombres con formato `<document_id>__parte-<numero>.pdf` permiten agrupar partes del mismo manual en la colección `manuales_tecnicos` mediante `document_id`. Para depurar un archivo concreto también se puede usar `--pdf`, sin aplicar el movimiento de estados:
+
+```bash
+python rag-engine/scripts/process_manual.py --pdf documents/manual-escaneado.pdf
+```
+
+El OCR admite un PDF y una salida alternativos, además de ajustar la resolución:
+
+```bash
+python rag-engine/scripts/ocr_manual.py \
+  --pdf documents/manual-escaneado.pdf \
+  --output output/manual_pages.json \
+  --dpi 200 \
+  --language spa
+```
+
+Cada página se convierte a escala de grises, se mejora el contraste y se limpia antes de ejecutar Tesseract. Si el texto preprocesado tiene peor calidad que el resultado directo, se conserva el resultado directo como fallback. La variable `TESSERACT_CMD` permite indicar explícitamente el binario cuando no está disponible en el `PATH`.
+
+Para medir el impacto sobre recuperación, ejecuta la evaluación antes y después de regenerar los chunks y subirlos a Qdrant:
+
+```bash
+cd rag-engine
+python scripts/evaluate_rag.py --skip-generation
+```
 
 ---
 
@@ -513,14 +552,17 @@ go test ./...
 
 ## 🗂️ Servicios principales
 
-| Servicio | Responsabilidad |
-|---|---|
-| `api-go` | API Gateway y punto de entrada público |
-| `rag-engine` | Recuperación semántica y API interna |
-| `qdrant` | Base de datos vectorial |
-| `mcp-server` | Servidor MCP para agentes |
-| Ollama en el host | Generación de respuestas mediante un LLM |
-| `prometheus`, `grafana`, `loki`, `tempo` | Métricas, paneles, logs y trazas |
+| Servicio | Responsabilidad | Descripción / Función |
+| :--- | :--- | :--- |
+| `api-go` | API Gateway y punto de entrada público | Gestiona peticiones HTTP, valida solicitudes, aplica control de concurrencia y orquesta la comunicación con el motor RAG. |
+| `rag-engine` | Recuperación semántica y API interna | Genera embeddings de preguntas con `bge-m3`, realiza búsquedas vectoriales y construye el contexto para el LLM. |
+| `qdrant` | Base de datos vectorial | Almacena los vectores semánticos de los manuales y ejecuta búsquedas de similitud en tiempo real. |
+| `mcp-server` | Servidor MCP para agentes | Expone las herramientas y capacidades del sistema RAG para integrarse con clientes y agentes compatibles con MCP. |
+| `ollama` | Generación de respuestas mediante un LLM | Ejecuta el modelo de lenguaje en local para redactar respuestas precisas utilizando el contexto recuperado. |
+| `prometheus` | Recolector de métricas | Mide en tiempo real la latencia, tráfico, tasa de errores y disponibilidad de los componentes de la aplicación. |
+| `grafana` | Visualización y paneles | Dashboard unificado que muestra gráficas de rendimiento, alertas activas y logs de la infraestructura. |
+| `loki` | Almacenamiento y gestión de logs | Agrupa y centraliza los registros de texto emitidos por las aplicaciones para diagnosticar fallos y errores. |
+| `tempo` | Tracing / Rastreo distribuido | Mide el tiempo de ejecución exacto y el recorrido de las peticiones entre los distintos microservicios. |
 
 ---
 

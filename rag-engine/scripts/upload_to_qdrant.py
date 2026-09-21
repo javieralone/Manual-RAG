@@ -1,5 +1,6 @@
 import json
 import sys
+import uuid
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
@@ -10,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 CHUNKS_INPUT = BASE_DIR / "output" / "manual_chunks.json"
 COLLECTION_NAME = "manuales_tecnicos"
+POINT_NAMESPACE = uuid.UUID("b8d8c5bb-0af3-4e76-88f6-7fa0c6e5c2f4")
 
 # 2. Verificar existencia del archivo de chunks
 if not CHUNKS_INPUT.exists():
@@ -55,11 +57,16 @@ for idx, item in enumerate(chunks):
     
     # Preparar el punto para Qdrant
     metadata = item.get("metadata", {})
+    document_id = metadata.get("document_id", "")
+    part = metadata.get("part", 1)
+    page = metadata.get("page", 0)
+    point_key = f"{document_id}:{part}:{page}:{idx}"
     payload = {
         "text": item["text"],
-        "page": metadata.get("page", 0),
+        "page": page,
         "source": metadata.get("source", "Desconocido"),
-        "document_id": metadata.get("document_id", ""),
+        "document_id": document_id,
+        "part": part,
     }
     for field in ("chapter", "section"):
         if metadata.get(field):
@@ -67,11 +74,18 @@ for idx, item in enumerate(chunks):
 
     points.append(
         PointStruct(
-            id=idx,
+            id=str(uuid.uuid5(POINT_NAMESPACE, point_key)),
             vector=vector,
             payload=payload,
         )
     )
+    completed = idx + 1
+    width = 30
+    filled = int(width * completed / len(chunks)) if chunks else width
+    bar = "=" * filled + ">" + " " * max(width - filled - 1, 0)
+    print(f"\rEmbeddings [{bar}] {completed}/{len(chunks)}", end="", flush=True)
+
+print()
 
 # Keyword indexes keep metadata filters efficient as the collection grows.
 for field in ("document_id", "chapter", "section"):
