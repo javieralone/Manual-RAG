@@ -1,0 +1,67 @@
+name: Feature Plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: "Número o slug de la feature, por ejemplo 06 o 06-cola-indexacion"
+        required: true
+        type: string
+      mode:
+        description: "Operación solicitada"
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - implement
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate implementation plan
+        run: >-
+          python scripts/resolve-feature.py
+          "${{ inputs.feature }}"
+          --output implementation-plan.md
+
+      - name: Upload implementation plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-${{ inputs.feature }}-plan
+          path: implementation-plan.md
+
+      - name: Create Copilot implementation issue
+        if: inputs.mode == 'implement'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEATURE: ${{ inputs.feature }}
+        run: |
+          gh label create copilot-implementation --color 1f6feb --description "Issue preparada para Copilot Cloud Agent" --force
+          {
+            echo "## Objetivo"
+            echo "Implementar la feature **${FEATURE}** en una rama de trabajo y abrir un Pull Request contra dev."
+            echo
+            echo "## Instrucciones para Copilot Cloud Agent"
+            echo "Lee el plan completo y el documento fuente. Inspecciona primero la arquitectura y los tests existentes. Implementa el cambio de forma incremental, agrega tests focalizados, actualiza documentación y ejecuta las validaciones del repositorio. No hagas merge directo."
+            echo
+            echo "## Plan de implementación"
+            cat implementation-plan.md
+          } > copilot-implementation-issue.md
+          gh issue create \
+            --title "Implement feature ${FEATURE}" \
+            --label copilot-implementation \
+            --body-file copilot-implementation-issue.md
