@@ -52,7 +52,7 @@ func (h *QueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// HandleQueryStream expone POST /query/stream: retransmite metadata, tokens y el evento final
+// HandleQueryStream expone POST /api/v1/query/stream: retransmite metadata, tokens y el evento final
 // de Ollama vía Server-Sent Events, actuando como proxy sin reconstruir la respuesta completa.
 func (h *QueryHandler) HandleQueryStream(w http.ResponseWriter, r *http.Request) {
 	var req HTTPQueryRequest

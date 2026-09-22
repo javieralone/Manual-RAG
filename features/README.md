@@ -8,7 +8,7 @@ Este directorio organiza las mejoras pendientes del proyecto por prioridad de im
 2. [05 - Soporte multi-colección y multi-manual](05-soporte-multi-coleccion.md)
 3. [09 - MCP multi-colección y herramientas por dominio](09-mcp-multi-coleccion.md)
 4. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
-5. [07 - UI de consulta y administración](07-ui-consulta-admin.md)
+5. [07 - UI de consulta y administración](07-ui-consulta-admin.md) — MVP con login, selector de colección, modo normal/stream y chat en `frontend/`
 6. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
 
 ## Principio de priorización

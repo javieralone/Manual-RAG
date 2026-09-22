@@ -16,7 +16,7 @@ func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHa
 	mux.Handle("/api/v1/query", protectedQuery)
 
 	protectedQueryStream := authenticate(authorize(rateLimit(http.HandlerFunc(queryHandler.HandleQueryStream))))
-	mux.Handle("/query/stream", protectedQueryStream)
+	mux.Handle("/api/v1/query/stream", protectedQueryStream)
 
 	mux.HandleFunc("/api/v1/auth/login", authHandler.HandleLogin)
 	mux.HandleFunc("/api/v1/auth/refresh", authHandler.HandleRefresh)

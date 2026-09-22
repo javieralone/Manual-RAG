@@ -30,7 +30,7 @@ export async function askStreamQuery({
   onComplete,
   onError,
 }) {
-  const response = await fetch(`${API_BASE_URL}/query/stream`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/query/stream`, {
     method: 'POST',
     headers: buildHeaders(token),
     body: JSON.stringify({ question, collection }),

@@ -64,7 +64,7 @@ Limita las peticiones concurrentes utilizando un canal con búfer para evitar so
 
 ### Rate limiting por IP y usuario
 
-Las rutas `POST /api/v1/query` y `POST /query/stream` aplican dos límites independientes por ventana fija: uno por IP de origen y otro por usuario autenticado. Una petición que supera cualquiera de los límites recibe `429 Too Many Requests` y `Retry-After`. El límite es local a cada instancia del gateway y no reemplaza un rate limiter distribuido si se escala horizontalmente.
+Las rutas `POST /api/v1/query` y `POST /api/v1/query/stream` aplican dos límites independientes por ventana fija: uno por IP de origen y otro por usuario autenticado. Una petición que supera cualquiera de los límites recibe `429 Too Many Requests` y `Retry-After`. El límite es local a cada instancia del gateway y no reemplaza un rate limiter distribuido si se escala horizontalmente.
 
 Variables: `RATE_LIMIT_ENABLED` (por defecto `true`), `RATE_LIMIT_REQUESTS` (por defecto `60`) y `RATE_LIMIT_WINDOW` (por defecto `1m`). El worker pool (`WORKER_LIMIT`) sigue siendo el límite global de concurrencia y puede responder con saturación aunque el rate limit no se haya alcanzado.
 
@@ -126,7 +126,7 @@ Procesa la pregunta del usuario, recupera contexto desde `rag-engine` y genera u
 
 ---
 
-### POST `/query/stream` — Streaming en tiempo real (SSE)
+### POST `/api/v1/query/stream` — Streaming en tiempo real (SSE)
 
 Misma lógica que `/api/v1/query` (retrieval + generación) pero reenvía la respuesta de Ollama token por token mediante **Server-Sent Events**, sin reconstruir la respuesta completa en el Gateway. Requiere el mismo `Bearer <access_token>` que `/api/v1/query`.
 
@@ -137,7 +137,7 @@ sequenceDiagram
     participant RAG as rag-engine (Python)
     participant Ollama
 
-    Cliente->>Gateway: POST /query/stream (question)
+    Cliente->>Gateway: POST /api/v1/query/stream (question)
     Gateway->>RAG: POST /search (retrieval)
     RAG-->>Gateway: chunks
     Gateway-->>Cliente: event: metadata (context)
@@ -191,7 +191,7 @@ data: {"total_duration_ms":1834,"time_to_first_token_ms":210,"token_count":42}
 #### Ejemplo con `curl`
 
 ```bash
-curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+curl -N --no-buffer -X POST http://localhost:8080/api/v1/query/stream \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
@@ -204,7 +204,7 @@ curl -N --no-buffer -X POST http://localhost:8080/query/stream \
 El endpoint no usa `EventSource` nativo (requiere `GET` sin headers personalizados); se consume con `fetch` y un `ReadableStream`:
 
 ```javascript
-const response = await fetch("http://localhost:8080/query/stream", {
+const response = await fetch("http://localhost:8080/api/v1/query/stream", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${accessToken}`,

@@ -43,7 +43,7 @@ Este MVP prioriza la experiencia mínima útil para validar el flujo completo de
 ### 3. Selector de modo de consulta
 
 - `normal`: usa `POST /api/v1/query`
-- `stream`: usa `POST /query/stream`
+- `stream`: usa `POST /api/v1/query/stream`
 
 ### 4. Chat
 
@@ -105,7 +105,7 @@ sequenceDiagram
     participant Qdrant
 
     User->>UI: pregunta + colección + modo stream
-    UI->>Gateway: POST /query/stream
+    UI->>Gateway: POST /api/v1/query/stream
     Gateway->>RAG: consulta con collection
     RAG->>Qdrant: búsqueda semántica
     Qdrant-->>RAG: chunks relevantes
@@ -174,7 +174,7 @@ Content-Type: application/json
 ### Consulta stream
 
 ```http
-POST /query/stream
+POST /api/v1/query/stream
 Authorization: Bearer <access_token>
 Content-Type: application/json
 

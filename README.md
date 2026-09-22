@@ -51,6 +51,8 @@ Respuesta generada
 
 Manual-RAG está diseñado como una solución distribuida orientada a servicios, con separación clara entre entrada HTTP, recuperación semántica, almacenamiento vectorial y generación de respuestas.
 
+Además, el repositorio incluye una interfaz web de consulta en React + Vite para autenticación, selección de colección y chat con soporte para consulta normal y streaming.
+
 ### Diagrama de alto nivel
 
 ```text
@@ -131,6 +133,14 @@ Manual-RAG/
 │   ├── Dockerfile
 │   └── README.md
 │
+├── frontend/                        # UI React + Vite para login y chat
+│   ├── src/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── .env.example
+│   └── README.md
+│
 ├── observability/                   # Métricas, trazas y logs
 │   ├── grafana/
 │   ├── loki/
@@ -155,6 +165,7 @@ Manual-RAG/
 |---|---|
 | `api-go` | Gateway público, autenticación, timeout, rate limiting y orquestación |
 | `rag-engine` | Generación de embeddings, búsqueda semántica y recuperación de contexto |
+| `frontend` | UI React + Vite para login, chat y selección de colección/modo |
 | `mcp-server` | Exposición del servicio RAG a clientes MCP |
 | `qdrant` | Base vectorial para búsqueda por similitud |
 | `ollama` | Generación final de respuesta a partir del contexto recuperado |
@@ -313,12 +324,12 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 > Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
 
-### `POST /query/stream`
+### `POST /api/v1/query/stream`
 
 Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`api-go/README.md`](api-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
 
 ```bash
-curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+curl -N --no-buffer -X POST http://localhost:8080/api/v1/query/stream \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { login as loginRequest } from './api/auth';
 import { askNormalQuery, askStreamQuery } from './api/chat';
 
@@ -16,12 +16,17 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [contextItems, setContextItems] = useState([]);
-  const [streamingAnswer, setStreamingAnswer] = useState('');
+  const streamCursorRef = useRef('');
+  const bottomRef = useRef(null);
 
   const collectionOptions = useMemo(
     () => ['generic_manuals', 'manuales_tecnicos'],
     []
   );
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading, contextItems]);
 
   const persistToken = (nextToken) => {
     if (nextToken) {
@@ -29,6 +34,35 @@ function App() {
     } else {
       localStorage.removeItem('manual-rag-token');
     }
+  };
+
+  const appendStreamChunk = (rawText) => {
+    const currentText = streamCursorRef.current;
+    if (!rawText) return;
+
+    let delta = rawText;
+    const maxOverlap = Math.min(currentText.length, rawText.length);
+
+    for (let i = maxOverlap; i > 0; i--) {
+      const suffix = currentText.slice(currentText.length - i);
+      const prefix = rawText.slice(0, i);
+      if (suffix === prefix) {
+        delta = rawText.slice(i);
+        break;
+      }
+    }
+
+    if (!delta) return;
+    streamCursorRef.current = currentText + delta;
+
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === 'assistant') {
+        last.text = (last.text || '') + delta;
+      }
+      return [...next];
+    });
   };
 
   const handleLogin = async (event) => {
@@ -55,7 +89,7 @@ function App() {
     setIsAuthenticated(false);
     setMessages([]);
     setContextItems([]);
-    setStreamingAnswer('');
+    streamCursorRef.current = '';
     setUsername('');
     setPassword('');
   };
@@ -67,8 +101,8 @@ function App() {
     setInput('');
     setError('');
     setLoading(true);
-    setStreamingAnswer('');
     setContextItems([]);
+    streamCursorRef.current = '';
 
     const userMessage = { role: 'user', text: question };
     setMessages((prev) => [...prev, userMessage]);
@@ -83,21 +117,13 @@ function App() {
           collection: selectedCollection,
           token,
           onToken: (text) => {
-            setStreamingAnswer((prev) => prev + text);
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last && last.role === 'assistant') {
-                last.text = (last.text || '') + text;
-              }
-              return [...next];
-            });
+            appendStreamChunk(text || '');
           },
           onMetadata: (metadata) => {
             setContextItems(metadata?.context || []);
           },
           onComplete: () => {
-            setStreamingAnswer('');
+            streamCursorRef.current = '';
           },
           onError: (message) => {
             setError(message);
@@ -130,7 +156,14 @@ function App() {
     return (
       <div className="page-shell auth-shell">
         <form className="auth-card" onSubmit={handleLogin}>
-          <h1>Manual-RAG</h1>
+          <div className="brand-lockup">
+            <div className="brand-mark">M</div>
+            <div>
+              <p className="label">CONSULTA</p>
+              <h1>Manual-RAG</h1>
+            </div>
+          </div>
+
           <label>
             Usuario
             <input
@@ -166,9 +199,12 @@ function App() {
   return (
     <div className="page-shell app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">Consulta</p>
-          <h2>Manual-RAG</h2>
+        <div className="brand-lockup compact">
+          <div className="brand-mark small">M</div>
+          <div>
+            <p className="label">CONSULTA</p>
+            <h2>Manual-RAG</h2>
+          </div>
         </div>
 
         <div className="controls">
@@ -222,6 +258,8 @@ function App() {
                 <div className="bubble loading">Generando respuesta...</div>
               </div>
             )}
+
+            <div ref={bottomRef} />
           </div>
 
           <div className="composer">
@@ -239,16 +277,18 @@ function App() {
 
         <aside className="context-panel">
           <h3>Contexto recuperado</h3>
-          {contextItems.length === 0 ? (
-            <p>No hay contexto aún.</p>
-          ) : (
-            contextItems.map((item, index) => (
-              <div key={`${item.text}-${index}`} className="context-item">
-                <small>Score: {item.score?.toFixed?.(3) ?? 'n/a'}</small>
-                <p>{item.text}</p>
-              </div>
-            ))
-          )}
+          <div className="context-list">
+            {contextItems.length === 0 ? (
+              <p className="no-context">No hay contexto aún.</p>
+            ) : (
+              contextItems.map((item, index) => (
+                <div key={`${item.text}-${index}`} className="context-item">
+                  <small>Score: {item.score?.toFixed?.(3) ?? 'n/a'}</small>
+                  <p>{item.text}</p>
+                </div>
+              ))
+            )}
+          </div>
 
           {error && <div className="error-box compact">{error}</div>}
         </aside>
