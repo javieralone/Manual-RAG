@@ -24,6 +24,7 @@ func NewQueryHandler(useCase QueryService) *QueryHandler {
 
 type HTTPQueryRequest struct {
 	Question   string `json:"question"`
+	Collection string `json:"collection,omitempty"`
 	DocumentID string `json:"document_id,omitempty"`
 	Chapter    string `json:"chapter,omitempty"`
 	Section    string `json:"section,omitempty"`
@@ -71,7 +72,7 @@ func (h *QueryHandler) HandleQueryStream(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *QueryHandler) executeQuery(r *http.Request, req HTTPQueryRequest) (*domain.QueryResponse, error) {
-	filters := domain.QueryFilters{DocumentID: req.DocumentID, Chapter: req.Chapter, Section: req.Section}
+	filters := domain.QueryFilters{Collection: req.Collection, DocumentID: req.DocumentID, Chapter: req.Chapter, Section: req.Section}
 	if filtered, ok := h.useCase.(ports.FilteredQueryUseCase); ok {
 		return filtered.ExecuteQueryWithFilters(r.Context(), req.Question, filters)
 	}
@@ -79,7 +80,7 @@ func (h *QueryHandler) executeQuery(r *http.Request, req HTTPQueryRequest) (*dom
 }
 
 func (h *QueryHandler) executeQueryStream(r *http.Request, req HTTPQueryRequest, sink ports.StreamSink) error {
-	filters := domain.QueryFilters{DocumentID: req.DocumentID, Chapter: req.Chapter, Section: req.Section}
+	filters := domain.QueryFilters{Collection: req.Collection, DocumentID: req.DocumentID, Chapter: req.Chapter, Section: req.Section}
 	if filtered, ok := h.useCase.(ports.FilteredQueryStreamUseCase); ok {
 		return filtered.ExecuteQueryStreamWithFilters(r.Context(), req.Question, filters, sink)
 	}

@@ -15,6 +15,7 @@ class RAGService:
         query_text: str,
         top_k: int,
         filters: Optional[Dict[str, str]] = None,
+        collection_name: Optional[str] = None,
     ) -> SearchResponse:
         cleaned_query = query_text.strip()
         if not cleaned_query:
@@ -27,9 +28,14 @@ class RAGService:
                 query_vector=vector,
                 top_k=top_k,
                 filters=filters,
+                collection_name=collection_name,
             )
         else:
-            chunks = self._vector_store.search_similar(query_vector=vector, top_k=top_k)
+            chunks = self._vector_store.search_similar(
+                query_vector=vector,
+                top_k=top_k,
+                collection_name=collection_name,
+            )
         observe_retrieval(started, len(chunks), len({chunk.source for chunk in chunks}))
 
         return SearchResponse(

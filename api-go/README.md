@@ -99,13 +99,14 @@ Procesa la pregunta del usuario, recupera contexto desde `rag-engine` y genera u
 ```json
 {
   "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
+  "collection": "manuales_tecnicos",
   "document_id": "0-lubricacion-mantenimiento",
   "chapter": "2",
   "section": "2.1"
 }
 ```
 
-Los campos `document_id`, `chapter` y `section` son opcionales y se combinan con AND cuando se envían.
+`collection` es opcional; si no se envía, el gateway usa la colección por defecto `generic_manuals`. Los campos `document_id`, `chapter` y `section` son opcionales y se combinan con AND cuando se envían dentro de la colección seleccionada.
 
 #### Response Body (200 OK)
 

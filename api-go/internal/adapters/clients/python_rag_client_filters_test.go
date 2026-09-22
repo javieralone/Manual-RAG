@@ -20,7 +20,7 @@ func TestPythonRAGClientSendsFiltersAndPreservesMetadata(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if request.DocumentID != "manual-a" || request.Chapter != "2" || request.Section != "2.1" {
+		if request.DocumentID != "manual-a" || request.Chapter != "2" || request.Section != "2.1" || request.Collection != "manuales_tecnicos" {
 			t.Fatalf("unexpected filters: %+v", request)
 		}
 
@@ -31,6 +31,7 @@ func TestPythonRAGClientSendsFiltersAndPreservesMetadata(t *testing.T) {
 
 	client := NewPythonRAGClient(server.URL, server.Client(), nil)
 	chunks, err := client.RetrieveContextWithFilters(context.Background(), "consulta", 3, domain.QueryFilters{
+		Collection: "manuales_tecnicos",
 		DocumentID: "manual-a",
 		Chapter:    "2",
 		Section:    "2.1",

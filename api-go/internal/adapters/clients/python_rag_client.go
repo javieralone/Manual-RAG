@@ -16,6 +16,7 @@ import (
 type pythonSearchRequest struct {
 	Query      string `json:"query"`
 	TopK       int    `json:"top_k"`
+	Collection string `json:"collection,omitempty"`
 	DocumentID string `json:"document_id,omitempty"`
 	Chapter    string `json:"chapter,omitempty"`
 	Section    string `json:"section,omitempty"`
@@ -53,6 +54,7 @@ func (c *PythonRAGClient) retrieveContext(ctx context.Context, query string, top
 	reqBody, err := json.Marshal(pythonSearchRequest{
 		Query:      query,
 		TopK:       topK,
+		Collection: filters.Collection,
 		DocumentID: filters.DocumentID,
 		Chapter:    filters.Chapter,
 		Section:    filters.Section,

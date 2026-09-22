@@ -78,11 +78,13 @@ SentenceTransformers
 Qdrant
 ```
 
-Colección:
+La colección por defecto es:
 
 ```text
-manuales_tecnicos
+generic_manuals
 ```
+
+Y también puede usarse explícitamente `manuales_tecnicos` u otra colección válida con el mismo formato `^[A-Za-z0-9_-]+$`.
 
 ---
 
@@ -163,44 +165,57 @@ POST /search
 {
   "query": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
   "top_k": 3,
+  "collection": "manuales_tecnicos",
   "document_id": "0-lubricacion-mantenimiento",
   "chapter": "2",
   "section": "2.1"
 }
 ```
 
-Los filtros `document_id`, `chapter` y `section` son opcionales y se aplican conjuntamente sobre el payload de Qdrant.
+`collection` es opcional. Si no se envía, el servicio usa `generic_manuals`. Los filtros `document_id`, `chapter` y `section` son opcionales y se aplican conjuntamente sobre el payload de Qdrant dentro de la colección seleccionada.
 
 ## OCR e indexación
 
-Los PDFs pendientes deben colocarse en `../documents/new`. Para procesar toda la cola con un solo comando:
+Los PDFs pendientes deben colgarse en `../documents/new/<nombre_coleccion>/`. El orquestador oficial es `process_manual_opt.py`:
 
-```bash
-python scripts/process_manual.py
+```powershell
+python scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
 ```
 
-El orquestador mueve cada PDF a `reading`, ejecuta OCR, generación de chunks y carga en Qdrant en ese orden, y después lo mueve a `../documents/completed`. Si falla, lo devuelve a `../documents/new` y registra el error en `../logs/ingestion.log`. Valida que `manual_pages.json` y `manual_chunks.json` existan y contengan texto antes de continuar.
+La colección se deriva de la carpeta y se mantiene a lo largo del flujo:
+
+```text
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/reading/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/completed/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+```
+
+`process_manual_opt.py` mueve el PDF a `reading`, ejecuta OCR, genera chunks, carga en Qdrant y solo al final lo mueve a `completed`. Si falla, lo devuelve a `new` y registra el error en `../logs/ingestion.log`.
 
 Para varias partes del mismo manual usa un identificador común:
 
 ```text
-../documents/new/manual-reparaciones-valiant__parte-001.pdf
-../documents/new/manual-reparaciones-valiant__parte-002.pdf
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-002.pdf
 ```
 
-Las partes se cargan en la colección `manuales_tecnicos` con el mismo `document_id` y un número de parte distinto. Los IDs de Qdrant son deterministas, así que reintentar una parte no duplica sus puntos.
+Las partes se cargan dentro de la colección indicada con el mismo `document_id` y un número de parte distinto. Los IDs de Qdrant son deterministas, así que reintentar una parte no duplica sus puntos.
 
-Para manuales escaneados, el script OCR permite configurar el documento, la salida y la resolución. Aplica preprocesado de imagen, normaliza palabras partidas entre líneas y usa el OCR directo como fallback cuando obtiene un resultado de mayor calidad:
+Para manuales escaneados, el script OCR permite configurar el documento, la salida, la resolución y la colección:
 
 ```bash
-python scripts/ocr_manual.py \
-  --pdf ../documents/manual-escaneado.pdf \
+python scripts/ocr_manual_opt.py \
+  --pdf ../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
   --output ../output/manual_pages.json \
+  --collection manuales_tecnicos \
   --dpi 200 \
   --language spa
 ```
 
-Después de regenerar el JSON, ejecuta `index_manual.py` y `upload_to_qdrant.py`. Para comparar precisión y recall, guarda un reporte de `python scripts/evaluate_rag.py --skip-generation` antes y después del reprocesamiento.
+Después de regenerar el JSON, ejecuta `index_manual.py` y `upload_to_qdrant.py --collection <nombre_coleccion>`. Para comparar precisión y recall, guarda un reporte con `python scripts/evaluate_rag.py --skip-generation` antes y después del reprocesamiento.
 
 ### Response
 

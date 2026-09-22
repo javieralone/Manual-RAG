@@ -50,7 +50,7 @@ def preprocess_page(page: Image.Image) -> Image.Image:
 
 def process_single_page_ocr(args_tuple: tuple) -> Dict[str, Any]:
     """Función de trabajo para ejecutar en paralelo."""
-    page, index, language, document_id, pdf_name, part, fast_mode = args_tuple
+    page, index, language, document_id, pdf_name, part, collection, fast_mode = args_tuple
     
     # 1. Asegurar que el proceso hijo encuentre Tesseract
     pytesseract.pytesseract.tesseract_cmd = resolve_tesseract_command()
@@ -74,6 +74,7 @@ def process_single_page_ocr(args_tuple: tuple) -> Dict[str, Any]:
         "source": pdf_name,
         "document_id": document_id,
         "part": part,
+        "collection": collection,
         "ocr_mode": mode,
         "ocr_quality": quality,
     }
@@ -85,6 +86,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=BASE_DIR / "output" / "manual_pages.json")
     parser.add_argument("--document-id", default=None)
     parser.add_argument("--part", type=int, default=1)
+    parser.add_argument("--collection", default="generic_manuals")
+    parser.add_argument("--pages", type=int, default=None, help="Número máximo de páginas a procesar. Si no se indica, se procesan todas.")
     parser.add_argument("--dpi", type=int, default=150)
     parser.add_argument("--language", default="spa")
     
@@ -115,26 +118,31 @@ def main() -> None:
         raise FileNotFoundError(f"No existe el PDF: {arguments.pdf}")
 
     pytesseract.pytesseract.tesseract_cmd = resolve_tesseract_command()
+    collection_name = arguments.collection or "generic_manuals"
+    if collection_name == "default_collection":
+        collection_name = "generic_manuals"
     document_id = arguments.document_id or arguments.pdf.stem
     
     total_pages = int(pdfinfo_from_path(str(arguments.pdf))["Pages"])
-    print(f"Procesando '{arguments.pdf.name}' ({total_pages} páginas) en modo '{arguments.memory_mode}' con {arguments.workers} workers...")
+    max_pages = total_pages if arguments.pages is None else min(int(arguments.pages), total_pages)
+    if arguments.pages is not None and arguments.pages <= 0:
+        raise ValueError("El argumento --pages debe ser mayor que 0.")
+
+    print(f"Procesando '{arguments.pdf.name}' ({max_pages}/{total_pages} páginas) en modo '{arguments.memory_mode}' con {arguments.workers} workers...")
 
     results: List[Dict[str, Any]] = []
 
     if arguments.memory_mode == "memory":
-        # Modo en memoria: Carga todas las páginas de golpe
         all_pages = convert_from_path(arguments.pdf, dpi=arguments.dpi)
         tasks = [
-            (page, idx + 1, arguments.language, document_id, arguments.pdf.name, arguments.part, arguments.fast_ocr)
-            for idx, page in enumerate(all_pages)
+            (page, idx + 1, arguments.language, document_id, arguments.pdf.name, arguments.part, collection_name, arguments.fast_ocr)
+            for idx, page in enumerate(all_pages[:max_pages])
         ]
         with ProcessPoolExecutor(max_workers=arguments.workers) as executor:
             results = list(executor.map(process_single_page_ocr, tasks))
     else:
-        # Modo en disco / por lotes (Bajo consumo de RAM)
         with ProcessPoolExecutor(max_workers=arguments.workers) as executor:
-            for index in range(1, total_pages + 1):
+            for index in range(1, max_pages + 1):
                 pages = convert_from_path(
                     arguments.pdf,
                     dpi=arguments.dpi,
@@ -144,10 +152,10 @@ def main() -> None:
                 if not pages:
                     continue
                 
-                task = (pages[0], index, arguments.language, document_id, arguments.pdf.name, arguments.part, arguments.fast_ocr)
+                task = (pages[0], index, arguments.language, document_id, arguments.pdf.name, arguments.part, collection_name, arguments.fast_ocr)
                 future = executor.submit(process_single_page_ocr, task)
                 results.append(future.result())
-                print(f"\rPágina {index}/{total_pages} completada", end="", flush=True)
+                print(f"\rPágina {index}/{max_pages} completada", end="", flush=True)
             print()
 
     # Ordenar por número de página

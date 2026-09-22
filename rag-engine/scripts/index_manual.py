@@ -39,20 +39,19 @@ for item in pages_data:
     source = item.get("source", "0-lubricacion-mantenimiento.pdf")
     document_id = item.get("document_id", Path(source).stem)
     part = item.get("part", 1)
+    collection = item.get("collection", "generic_manuals")
     chapter = item.get("chapter")
     section = item.get("section")
-    
-    if not text.strip():
-        continue
-        
+
     page_chunks = text_splitter.split_text(text)
-    
+
     for idx, chunk_text in enumerate(page_chunks):
         metadata = {
             "page": page_num,
             "source": source,
             "document_id": document_id,
             "part": part,
+            "collection": collection,
         }
         if chapter:
             metadata["chapter"] = chapter

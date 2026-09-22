@@ -18,13 +18,15 @@ class QdrantAdapter(VectorStorePort):
         query_vector: List[float],
         top_k: int,
         filters: Optional[Dict[str, str]] = None,
+        collection_name: Optional[str] = None,
     ) -> List[ChunkResult]:
         started = time.perf_counter()
         tracer = trace.get_tracer("manual-rag/rag-engine")
+        collection = collection_name or self._collection_name
         with tracer.start_as_current_span("qdrant.query"):
             try:
                 response = self._client.query_points(
-                    collection_name=self._collection_name,
+                    collection_name=collection,
                     query=query_vector,
                     limit=top_k,
                     query_filter=self._build_filter(filters),

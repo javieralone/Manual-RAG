@@ -11,13 +11,14 @@ type DocumentChunk struct {
 }
 
 type QueryFilters struct {
+	Collection string `json:"collection,omitempty"`
 	DocumentID string `json:"document_id,omitempty"`
 	Chapter    string `json:"chapter,omitempty"`
 	Section    string `json:"section,omitempty"`
 }
 
 func (f QueryFilters) IsEmpty() bool {
-	return f.DocumentID == "" && f.Chapter == "" && f.Section == ""
+	return f.Collection == "" && f.DocumentID == "" && f.Chapter == "" && f.Section == ""
 }
 
 type QueryResponse struct {

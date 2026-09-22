@@ -7,7 +7,7 @@ import ollama
 # 1. Definir la raíz del proyecto dinámicamente
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-COLLECTION_NAME = "manuales_tecnicos"
+COLLECTION_NAME = "generic_manuals"
 OLLAMA_MODEL = "qwen2.5:1.5b"
 
 # 2. Conectar a Qdrant y cargar el modelo de embeddings

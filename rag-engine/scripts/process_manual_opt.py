@@ -16,12 +16,16 @@ COMPLETED_DIR = DOCUMENTS_DIR / "completed"
 LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "ingestion.log"
 LOCK_FILE = LOG_DIR / "ingestion.lock"
+DEFAULT_COLLECTION = "generic_manuals"
+VALID_COLLECTION_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 PART_PATTERN = re.compile(r"^(?P<document>.+)__parte-(?P<part>\d+)\.pdf$", re.IGNORECASE)
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Procesa los PDFs nuevos y los carga en Qdrant.")
     parser.add_argument("--pdf", type=Path, help="Procesa un PDF concreto sin usar la cola.")
+    parser.add_argument("--collection", default=None, help="Colección Qdrant destino. Si no se indica, se infiere desde la carpeta documents/new/<colección>.")
+    parser.add_argument("--pages", type=int, default=None, help="Número máximo de páginas a procesar por PDF. Si no se indica, se procesan todas.")
     parser.add_argument("--dpi", type=int, default=150)
     parser.add_argument("--language", default="spa")
     parser.add_argument("--python", default=sys.executable)
@@ -73,6 +77,32 @@ def ingestion_lock():
         LOCK_FILE.unlink(missing_ok=True)
 
 
+def validate_collection_name(value: str | None, default: str = DEFAULT_COLLECTION) -> str:
+    candidate = (value or default).strip()
+    if not candidate or candidate == "default_collection":
+        return default
+    if not VALID_COLLECTION_RE.fullmatch(candidate):
+        raise ValueError(
+            f"Colección inválida '{candidate}'. Usa solo letras, números, guion y guion bajo."
+        )
+    return candidate
+
+
+def infer_collection_name(pdf_path: Path, explicit: str | None = None) -> str:
+    if explicit:
+        return validate_collection_name(explicit)
+
+    resolved = pdf_path.resolve()
+    for parent in reversed(resolved.parents):
+        if parent.name == "new" and parent.parent == DOCUMENTS_DIR:
+            continue
+        if parent == NEW_DIR:
+            continue
+        if parent.parent == NEW_DIR:
+            return validate_collection_name(parent.name)
+    return DEFAULT_COLLECTION
+
+
 def document_identity(pdf_path: Path) -> tuple[str, int]:
     match = PART_PATTERN.match(pdf_path.name)
     if match:
@@ -102,18 +132,19 @@ def require_non_empty_json(path: Path, key: str) -> None:
         raise RuntimeError(f"El archivo {path} no contiene datos utilizables")
 
 
-def process_pdf(pdf_path: Path, arguments: argparse.Namespace) -> None:
+def process_pdf(pdf_path: Path, arguments: argparse.Namespace, collection_name: str | None = None) -> str:
     pages_path = BASE_DIR / "output" / "manual_pages.json"
     chunks_path = BASE_DIR / "output" / "manual_chunks.json"
     document_id, part = document_identity(pdf_path)
+    collection_name = validate_collection_name(collection_name or infer_collection_name(pdf_path, arguments.collection))
 
-    # Construcción del comando para el paso OCR con los flags de optimización
     ocr_command = [
         arguments.python, str(SCRIPTS_DIR / "ocr_manual_opt.py"),
         "--pdf", str(pdf_path),
         "--output", str(pages_path),
         "--document-id", document_id,
         "--part", str(part),
+        "--collection", collection_name,
         "--dpi", str(arguments.dpi),
         "--language", arguments.language,
         "--memory-mode", arguments.memory_mode,
@@ -122,6 +153,8 @@ def process_pdf(pdf_path: Path, arguments: argparse.Namespace) -> None:
 
     if arguments.fast_ocr:
         ocr_command.append("--fast-ocr")
+    if arguments.pages is not None:
+        ocr_command.extend(["--pages", str(arguments.pages)])
 
     run_step("1/3 OCR", ocr_command)
     require_non_empty_json(pages_path, "text")
@@ -129,30 +162,36 @@ def process_pdf(pdf_path: Path, arguments: argparse.Namespace) -> None:
     run_step("2/3 indexacion", [arguments.python, str(SCRIPTS_DIR / "index_manual.py")])
     require_non_empty_json(chunks_path, "text")
 
-    run_step("3/3 carga en Qdrant", [arguments.python, str(SCRIPTS_DIR / "upload_to_qdrant.py")])
+    run_step("3/3 carga en Qdrant", [arguments.python, str(SCRIPTS_DIR / "upload_to_qdrant.py"), "--collection", collection_name])
+    return collection_name
 
 
 def process_queued_pdf(source: Path, arguments: argparse.Namespace, logger: logging.Logger) -> bool | None:
-    reading_path = READING_DIR / source.name
+    collection_name = infer_collection_name(source, arguments.collection)
+    reading_path = READING_DIR / collection_name / source.name
+    completed_path = COMPLETED_DIR / collection_name / source.name
+    original_path = source
+    reading_path.parent.mkdir(parents=True, exist_ok=True)
+    completed_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         source.rename(reading_path)
-        logger.info("file=%s stage=reading", source.name)
-        process_pdf(reading_path, arguments)
-        reading_path.rename(COMPLETED_DIR / source.name)
-        logger.info("file=%s stage=completed", source.name)
-        print(f"Completado: {source.name}", flush=True)
+        logger.info("file=%s collection=%s stage=reading", source.name, collection_name)
+        process_pdf(reading_path, arguments, collection_name)
+        reading_path.rename(completed_path)
+        logger.info("file=%s collection=%s stage=completed", source.name, collection_name)
+        print(f"Completado: {source.name} [{collection_name}]", flush=True)
         return True
     except KeyboardInterrupt:
-        logger.exception("file=%s stage=interrupted", source.name)
+        logger.exception("file=%s collection=%s stage=interrupted", source.name, collection_name)
         if reading_path.exists():
-            reading_path.rename(NEW_DIR / source.name)
-        print(f"Interrumpido: {source.name}. Volvio a new.", flush=True)
+            reading_path.rename(original_path)
+        print(f"Interrumpido: {source.name}. Volvio a {original_path.parent}", flush=True)
         return None
     except Exception:
-        logger.exception("file=%s stage=failed", source.name)
+        logger.exception("file=%s collection=%s stage=failed", source.name, collection_name)
         if reading_path.exists():
-            reading_path.rename(NEW_DIR / source.name)
-        print(f"Fallo: {source.name}. Volvio a new. Revisa {LOG_FILE}", flush=True)
+            reading_path.rename(original_path)
+        print(f"Fallo: {source.name}. Volvio a {original_path.parent}. Revisa {LOG_FILE}", flush=True)
         return False
 
 
@@ -167,13 +206,18 @@ def main() -> int:
             pdf_path = arguments.pdf.resolve()
             if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
                 raise FileNotFoundError(f"El archivo no existe o no es PDF: {pdf_path}")
-            process_pdf(pdf_path, arguments)
+            process_pdf(pdf_path, arguments, validate_collection_name(arguments.collection) if arguments.collection else infer_collection_name(pdf_path))
             return 0
 
-        queued_files = sorted(
-            path for path in NEW_DIR.iterdir()
-            if path.is_file() and path.suffix.lower() == ".pdf"
-        )
+        queued_files = []
+        for collection_dir in sorted(NEW_DIR.iterdir(), key=lambda item: item.name):
+            if not collection_dir.is_dir():
+                continue
+            queued_files.extend(
+                sorted(
+                    path for path in collection_dir.rglob("*.pdf") if path.is_file()
+                )
+            )
         if not queued_files:
             print(f"No hay PDFs nuevos en {NEW_DIR}")
             return 0

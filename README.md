@@ -418,18 +418,50 @@ python rag-engine/scripts/process_manual.py
 
 `process_manual.py` toma todos los PDFs de `documents/new`, mueve cada uno a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si las tres etapas terminan correctamente. Si falla, vuelve a `new` y registra el error en `logs/ingestion.log`. Un lock impide ejecutar dos ingestas simultáneas.
 
-Los nombres con formato `<document_id>__parte-<numero>.pdf` permiten agrupar partes del mismo manual en la colección `manuales_tecnicos` mediante `document_id`. Para depurar un archivo concreto también se puede usar `--pdf`, sin aplicar el movimiento de estados:
+La ingesta sigue el patrón de carpetas `documents/new/<nombre_coleccion>/`, `documents/reading/<nombre_coleccion>/` y `documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
 
-```bash
-python rag-engine/scripts/process_manual.py --pdf documents/manual-escaneado.pdf
+Ejemplo de estructura:
+
+```text
+documents/
+├── new/
+│   ├── manuales_tecnicos/
+│   │   ├── <nombre-manual>__parte-001.pdf
+│   │   └── <nombre-manual>__parte-002.pdf
+│   └── generic_manuals/
+│       └── <nombre-manual>__parte-001.pdf
+├── reading/
+│   ├── manuales_tecnicos/
+│   └── generic_manuals/
+└── completed/
+    ├── manuales_tecnicos/
+    └── generic_manuals/
 ```
 
-El OCR admite un PDF y una salida alternativos, además de ajustar la resolución:
+El orquestador oficial es `process_manual_opt.py` y conserva los parámetros de OCR y rendimiento:
+
+```powershell
+python rag-engine/scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
+```
+
+También puedes procesar un PDF concreto o forzar una colección:
+
+```powershell
+python rag-engine/scripts/process_manual_opt.py --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf --collection manuales_tecnicos
+```
+
+Si la colección no se indica, se usa la inferida desde la carpeta `documents/new/<nombre_coleccion>/`. Cuando no hay carpeta compatible, el valor por defecto es `generic_manuals`.
+
+El OCR admite configuración adicional de salida, resolución y lenguaje:
 
 ```bash
-python rag-engine/scripts/ocr_manual.py \
-  --pdf documents/manual-escaneado.pdf \
+python rag-engine/scripts/ocr_manual_opt.py \
+  --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
   --output output/manual_pages.json \
+  --collection manuales_tecnicos \
   --dpi 200 \
   --language spa
 ```
@@ -586,7 +618,7 @@ HTTP_CLIENT_TIMEOUT=5m
 REQUEST_TIMEOUT=5m
 ```
 
-El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, la colección `manuales_tecnicos` y el modelo de embeddings `BAAI/bge-m3`. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
+El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, el valor por defecto `generic_manuals` para la colección y el modelo de embeddings `BAAI/bge-m3`. La colección puede seleccionarse explícitamente desde la API, MCP o la ingesta, y `manuales_tecnicos` sigue funcionando como una colección independiente y compatible. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
 
 No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
