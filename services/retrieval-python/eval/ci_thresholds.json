@@ -1,0 +1,6 @@
+{
+  "min_context_recall": 1.0,
+  "min_context_precision": 1.0,
+  "min_groundedness": 1.0,
+  "max_latency_seconds": 1.0
+}

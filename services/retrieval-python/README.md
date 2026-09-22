@@ -305,6 +305,8 @@ python scripts/evaluate_rag.py                     # incluye generación de resp
 
 El runner guarda un reporte JSON en `../data/artifacts/evaluations/eval_report_<timestamp>.json` y termina con código de salida distinto de cero si algún caso no supera los thresholds, para poder integrarlo en la pipeline de validación.
 
+En pull requests y cambios sobre `services/retrieval-python`, el workflow `.github/workflows/rag-evaluation.yml` ejecuta el mismo golden dataset con un fixture determinista versionado (`eval/ci_fixture.json`). El job no depende de Qdrant, Ollama ni de descargar modelos, y queda bloqueado si algún caso no alcanza los thresholds estrictos de `eval/ci_thresholds.json` para recall, groundedness, precision o latencia. El reporte queda disponible como artifact de GitHub Actions.
+
 ---
 
 # 🐳 Servicios Docker

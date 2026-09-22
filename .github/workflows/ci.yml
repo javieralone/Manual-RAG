@@ -5,7 +5,14 @@ on:
     branches:
       - main
       - master
+      - dev
+      - feature/*
   pull_request:
+    branches:
+      - main
+      - master
+      - dev
+      - feature/*
 
 jobs:
   validate:
