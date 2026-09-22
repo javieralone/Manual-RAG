@@ -1,3 +1,4 @@
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -11,8 +12,16 @@ BASE_DIR = SERVICE_DIR.parent.parent
 
 # 2. Construir rutas relativas a la raíz
 ARTIFACTS_DIR = BASE_DIR / "data" / "artifacts"
-JSON_INPUT = ARTIFACTS_DIR / "manual_pages.json"
-CHUNKS_OUTPUT = ARTIFACTS_DIR / "manual_chunks.json"
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Divide páginas OCR en chunks.")
+    parser.add_argument("--pages-input", type=Path, default=ARTIFACTS_DIR / "manual_pages.json")
+    parser.add_argument("--chunks-output", type=Path, default=ARTIFACTS_DIR / "manual_chunks.json")
+    return parser.parse_args()
+
+
+arguments = parse_arguments()
+JSON_INPUT = arguments.pages_input
+CHUNKS_OUTPUT = arguments.chunks_output
 
 print(f"Buscando archivo de entrada en: {JSON_INPUT}")
 

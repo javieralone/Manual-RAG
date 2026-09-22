@@ -1,8 +1,10 @@
 import argparse
 import json
+import os
 import re
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
@@ -29,20 +31,29 @@ def validate_collection_name(value: str | None, default: str = "generic_manuals"
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Carga chunks en una colección Qdrant específica.")
     parser.add_argument("--collection", default="generic_manuals", help="Nombre de la colección Qdrant a usar.")
+    parser.add_argument("--chunks-input", type=Path, default=CHUNKS_INPUT)
+    parser.add_argument("--job-id")
+    parser.add_argument("--object-key", default="")
+    parser.add_argument("--file-sha256", default="")
+    parser.add_argument("--ingested-at", default=None)
     return parser.parse_args()
 
 
 arguments = parse_arguments()
 COLLECTION_NAME = validate_collection_name(arguments.collection)
+CHUNKS_INPUT = arguments.chunks_input
+INGESTED_AT = arguments.ingested_at or datetime.now(timezone.utc).isoformat()
 
 if not CHUNKS_INPUT.exists():
     print(f"\n[ERROR] No existe el archivo '{CHUNKS_INPUT}'.")
     print("Asegúrate de ejecutar primero 'index_manual.py'.")
     sys.exit(1)
 
-print("Conectando a Qdrant en localhost:6333...")
+qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+print(f"Conectando a Qdrant en {qdrant_host}:{qdrant_port}...")
 try:
-    client = QdrantClient(host="localhost", port=6333)
+    client = QdrantClient(host=qdrant_host, port=qdrant_port)
     client.get_collections()
 except Exception as e:
     print(f"\n[ERROR] No se pudo conectar a Qdrant: {e}")
@@ -71,8 +82,7 @@ points = []
 for idx, item in enumerate(chunks):
     vector = model.encode(item["text"]).tolist()
     metadata = item.get("metadata", {})
-    collection_name = metadata.get("collection") or arguments.collection or "generic_manuals"
-    collection_name = validate_collection_name(collection_name)
+    collection_name = COLLECTION_NAME
     document_id = metadata.get("document_id", "")
     part = metadata.get("part", 1)
     page = metadata.get("page", 0)
@@ -84,6 +94,10 @@ for idx, item in enumerate(chunks):
         "document_id": document_id,
         "part": part,
         "collection": collection_name,
+        "job_id": arguments.job_id or metadata.get("job_id", ""),
+        "minio_object_key": arguments.object_key or metadata.get("minio_object_key", ""),
+        "file_sha256": arguments.file_sha256 or metadata.get("file_sha256", ""),
+        "ingested_at": metadata.get("ingested_at", INGESTED_AT),
     }
     for field in ("chapter", "section"):
         if metadata.get(field):
