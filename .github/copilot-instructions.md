@@ -1,7 +1,7 @@
 # Manual-RAG workspace guidance
 
 ## Project shape
-- This repository is a local RAG system composed of `api-go`, `rag-engine`, `frontend`, Qdrant, and Ollama.
+- This repository is a local RAG system composed of `services/gateway-go`, `services/retrieval-python`, `apps/web`, Qdrant, and Ollama.
 - `api-go` is the public HTTP gateway and owns query orchestration, timeouts, cancellation, and concurrency limits.
 - `rag-engine` is the Python retrieval service and MCP server. It owns embeddings, vector search, ingestion scripts, and retrieval DTOs.
 - `frontend` is the React + Vite UI for login, chat, collection selection and streaming query mode.
@@ -20,7 +20,7 @@
 - Before editing, inspect the nearest owning service, port, adapter, and test or call site.
 - Prefer the smallest change that preserves public contracts and existing naming.
 - For cross-service changes, update both sides of the HTTP contract and validate with Docker Compose or focused local checks.
-- For UI work in `frontend`, keep the React + Vite app aligned with the API Gateway contract and document any assumptions in `frontend/README.md`.
+- For UI work in `apps/web`, keep the React + Vite app aligned with the API Gateway contract and document any assumptions in `apps/web/README.md`.
 - Use `go build ./...` for Go changes and the repository's Python checks or a focused import/compile check for Python changes.
 - Validate frontend changes with `npm run build` before declaring the UI ready.
 - Do not rewrite README claims unless the implementation and deployment behavior have been verified.

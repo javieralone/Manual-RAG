@@ -1,13 +1,26 @@
 services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: rag_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # 1. Base de datos vectorial
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.1
     container_name: rag_qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - ./qdrant_storage:/qdrant/storage
+      - ./data/local/qdrant:/qdrant/storage
     deploy:
       resources:
         limits:
@@ -22,7 +35,7 @@ services:
   # 2. Microservicio Motor RAG (Python)
   rag-engine:
     build:
-      context: ./rag-engine
+      context: ./services/retrieval-python
       dockerfile: Dockerfile
     container_name: rag_engine
     ports:
@@ -35,10 +48,13 @@ services:
       - MKL_NUM_THREADS=2
       - OTEL_SERVICE_NAME=rag-engine
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - QDRANT_TIMEOUT_SECONDS=${QDRANT_TIMEOUT_SECONDS:-5}
+      - QDRANT_RETRY_ATTEMPTS=${QDRANT_RETRY_ATTEMPTS:-2}
+      - QDRANT_RETRY_BACKOFF_SECONDS=${QDRANT_RETRY_BACKOFF_SECONDS:-0.2}
     volumes:
       - huggingface_cache:/app/.cache/huggingface  # Guarda el modelo en el volumen
-      - ./documents:/app/documents
-      - ./output:/app/output
+      - ./data/documents:/app/documents
+      - ./data/artifacts:/app/output
     deploy:
       resources:
         limits:
@@ -52,11 +68,12 @@ services:
       qdrant:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # 2b. Servidor MCP para GitHub Copilot / clientes MCP
   mcp-server:
     build:
-      context: ./rag-engine
+      context: ./services/retrieval-python
       dockerfile: Dockerfile
     container_name: rag_mcp_server
     command: ["python", "-m", "app.mcp_server"]
@@ -75,8 +92,8 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     volumes:
       - huggingface_cache:/app/.cache/huggingface
-      - ./documents:/app/documents
-      - ./output:/app/output
+      - ./data/documents:/app/documents
+      - ./data/artifacts:/app/output
     deploy:
       resources:
         limits:
@@ -84,12 +101,18 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8001), 2).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # 3. API Gateway en Go
   api-go:
     build:
-      context: ./api-go
+      context: ./services/gateway-go
       dockerfile: Dockerfile
     container_name: rag_go_api
     ports:
@@ -104,6 +127,8 @@ services:
       - AUTH_AUDIENCE=${AUTH_AUDIENCE:-manual-rag-client}
       - AUTH_ACCESS_TTL=${AUTH_ACCESS_TTL:-15m}
       - AUTH_REFRESH_TTL=${AUTH_REFRESH_TTL:-168h}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-true}
+      - AUTH_SESSION_REDIS_URL=${AUTH_SESSION_REDIS_URL:-redis://redis:6379/0}
       - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:?AUTH_ADMIN_USERNAME must be set}
       - AUTH_ADMIN_PASSWORD_HASH=${AUTH_ADMIN_PASSWORD_HASH:?AUTH_ADMIN_PASSWORD_HASH must be set}
       - AUTH_ADMIN_ROLES=${AUTH_ADMIN_ROLES:-admin}
@@ -113,7 +138,13 @@ services:
       - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-1m}
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-5m}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-5m}
+      - MAX_REQUEST_BODY_BYTES=${MAX_REQUEST_BODY_BYTES:-1048576}
       - READINESS_INTERVAL=${READINESS_INTERVAL:-15s}
+      - SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT:-15s}
+      - DEPENDENCY_RETRY_ATTEMPTS=${DEPENDENCY_RETRY_ATTEMPTS:-2}
+      - DEPENDENCY_RETRY_BACKOFF=${DEPENDENCY_RETRY_BACKOFF:-200ms}
+      - CIRCUIT_BREAKER_FAILURES=${CIRCUIT_BREAKER_FAILURES:-5}
+      - CIRCUIT_BREAKER_RESET=${CIRCUIT_BREAKER_RESET:-30s}
       - OTEL_SERVICE_NAME=api-go
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     extra_hosts:
@@ -124,20 +155,35 @@ services:
           memory: 256m
     depends_on:
       rag-engine:
-        condition: service_started
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    stop_grace_period: 20s
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     container_name: rag_frontend
     ports:
-      - "5173:5173"
+      - "5173:8080"
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
     depends_on:
       - api-go
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   prometheus:
@@ -146,8 +192,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -164,11 +210,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
       - loki
@@ -181,7 +227,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - ./deploy/observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
@@ -190,7 +236,7 @@ services:
     image: grafana/promtail:3.2.1
     container_name: rag_promtail
     volumes:
-      - ./observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - ./deploy/observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - promtail_positions:/tmp
@@ -207,7 +253,7 @@ services:
       - "4317:4317"
       - "4318:4318"
     volumes:
-      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - ./deploy/observability/tempo/tempo.yml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
     command: ["-config.file=/etc/tempo.yaml"]
     restart: unless-stopped
@@ -219,3 +265,4 @@ volumes:
   loki_data:
   tempo_data:
   promtail_positions:
+  redis_data:

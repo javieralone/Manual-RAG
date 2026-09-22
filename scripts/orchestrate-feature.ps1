@@ -7,7 +7,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 if (-not $Feature) {
-    $Feature = "01-base-observabilidad"
+    $Feature = "06-cola-indexacion"
 }
 
 $targetBranch = "feature/$Feature"

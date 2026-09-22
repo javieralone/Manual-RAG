@@ -51,10 +51,10 @@ else
   FEATURE_PATTERN="*"
 fi
 
-FEATURES=( $(printf '%s\n' "$(find features -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort)" | sed 's#^features/##; s#\.md$##' | head -n 100) )
+FEATURES=( $(printf '%s\n' "$(find docs/roadmap -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort)" | sed 's#^docs/roadmap/##; s#\.md$##' | head -n 100) )
 
 if [[ ${#FEATURES[@]} -eq 0 ]]; then
-  echo "No se encontraron features en features/*.md" >&2
+  echo "No se encontraron features en docs/roadmap/*.md" >&2
   exit 1
 fi
 
