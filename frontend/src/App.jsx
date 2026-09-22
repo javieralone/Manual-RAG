@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { login as loginRequest } from './api/auth';
+import { login as loginRequest, refreshToken as refreshTokenRequest } from './api/auth';
 import { askNormalQuery, askStreamQuery } from './api/chat';
 
 const DEFAULT_COLLECTION = 'manuales_tecnicos';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('manual-rag-token') || '');
+  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('manual-rag-refresh-token') || '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,6 +18,7 @@ function App() {
   const [input, setInput] = useState('');
   const [contextItems, setContextItems] = useState([]);
   const streamCursorRef = useRef('');
+  const activeRequestRef = useRef(null);
   const bottomRef = useRef(null);
 
   const collectionOptions = useMemo(
@@ -33,6 +35,14 @@ function App() {
       localStorage.setItem('manual-rag-token', nextToken);
     } else {
       localStorage.removeItem('manual-rag-token');
+    }
+  };
+
+  const persistRefreshToken = (nextToken) => {
+    if (nextToken) {
+      localStorage.setItem('manual-rag-refresh-token', nextToken);
+    } else {
+      localStorage.removeItem('manual-rag-refresh-token');
     }
   };
 
@@ -59,7 +69,10 @@ function App() {
       const next = [...prev];
       const last = next[next.length - 1];
       if (last && last.role === 'assistant') {
-        last.text = (last.text || '') + delta;
+        next[next.length - 1] = {
+          ...last,
+          text: (last.text || '') + delta,
+        };
       }
       return [...next];
     });
@@ -73,8 +86,11 @@ function App() {
     try {
       const result = await loginRequest(username, password);
       const nextToken = result.access_token || result.token || '';
+      const nextRefreshToken = result.refresh_token || '';
       persistToken(nextToken);
+      persistRefreshToken(nextRefreshToken);
       setToken(nextToken);
+      setRefreshToken(nextRefreshToken);
       setIsAuthenticated(Boolean(nextToken));
     } catch (err) {
       setError(err.message || 'Credenciales inválidas');
@@ -85,7 +101,9 @@ function App() {
 
   const handleLogout = () => {
     persistToken('');
+    persistRefreshToken('');
     setToken('');
+    setRefreshToken('');
     setIsAuthenticated(false);
     setMessages([]);
     setContextItems([]);
@@ -94,10 +112,41 @@ function App() {
     setPassword('');
   };
 
+  const handleRefreshToken = async () => {
+    if (!refreshToken) {
+      setError('No hay un token de renovación disponible. Inicia sesión de nuevo.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await refreshTokenRequest(refreshToken);
+      const nextToken = result.access_token || result.token || '';
+      const nextRefreshToken = result.refresh_token || refreshToken;
+
+      if (!nextToken) {
+        throw new Error('El servidor no devolvió un token de acceso.');
+      }
+
+      persistToken(nextToken);
+      persistRefreshToken(nextRefreshToken);
+      setToken(nextToken);
+      setRefreshToken(nextRefreshToken);
+    } catch (err) {
+      setError(err.message || 'No se pudo renovar la sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || activeRequestRef.current) return;
 
     const question = input.trim();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
     setInput('');
     setError('');
     setLoading(true);
@@ -116,6 +165,7 @@ function App() {
           question,
           collection: selectedCollection,
           token,
+          signal: controller.signal,
           onToken: (text) => {
             appendStreamChunk(text || '');
           },
@@ -134,6 +184,7 @@ function App() {
           question,
           collection: selectedCollection,
           token,
+          signal: controller.signal,
         });
 
         const assistantMessage = {
@@ -146,10 +197,21 @@ function App() {
         setContextItems(result?.context || []);
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        setError('Consulta cancelada.');
+        return;
+      }
       setError(err.message || 'Error al consultar el sistema');
     } finally {
-      setLoading(false);
+      if (activeRequestRef.current === controller) {
+        activeRequestRef.current = null;
+        setLoading(false);
+      }
     }
+  };
+
+  const handleCancel = () => {
+    activeRequestRef.current?.abort();
   };
 
   if (!isAuthenticated) {
@@ -233,6 +295,14 @@ function App() {
           <button className="ghost" onClick={handleLogout} type="button">
             Salir
           </button>
+          <button
+            className="ghost"
+            onClick={handleRefreshToken}
+            type="button"
+            disabled={loading || !refreshToken}
+          >
+            Renovar sesión
+          </button>
         </div>
       </header>
 
@@ -253,7 +323,7 @@ function App() {
               </div>
             ))}
 
-            {loading && queryMode === 'stream' && (
+            {loading && (
               <div className="message assistant">
                 <div className="bubble loading">Generando respuesta...</div>
               </div>
@@ -268,10 +338,17 @@ function App() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe tu pregunta..."
+              disabled={loading}
             />
-            <button onClick={handleSend} disabled={loading || !input.trim()}>
-              {loading ? 'Enviando...' : 'Enviar'}
-            </button>
+            {loading ? (
+              <button className="ghost" onClick={handleCancel} type="button">
+                Cancelar
+              </button>
+            ) : (
+              <button onClick={handleSend} disabled={!input.trim()}>
+                Enviar
+              </button>
+            )}
           </div>
         </section>
 

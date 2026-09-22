@@ -1,10 +1,11 @@
 import { API_BASE_URL, buildHeaders } from './client';
 
-export async function askNormalQuery({ question, collection, token }) {
+export async function askNormalQuery({ question, collection, token, signal }) {
   const response = await fetch(`${API_BASE_URL}/api/v1/query`, {
     method: 'POST',
     headers: buildHeaders(token),
     body: JSON.stringify({ question, collection }),
+    signal,
   });
 
   if (!response.ok) {
@@ -25,6 +26,7 @@ export async function askStreamQuery({
   question,
   collection,
   token,
+  signal,
   onToken,
   onMetadata,
   onComplete,
@@ -34,6 +36,7 @@ export async function askStreamQuery({
     method: 'POST',
     headers: buildHeaders(token),
     body: JSON.stringify({ question, collection }),
+    signal,
   });
 
   if (!response.ok) {

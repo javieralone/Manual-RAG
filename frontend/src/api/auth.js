@@ -13,3 +13,13 @@ export async function login(username, password) {
 
   return handleApiResponse(response);
 }
+
+export async function refreshToken(refreshTokenValue) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify({ refresh_token: refreshTokenValue }),
+  });
+
+  return handleApiResponse(response);
+}
