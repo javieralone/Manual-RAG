@@ -141,13 +141,14 @@ GET /health
 
 ```json
 {
-  "status": "UP"
+  "status": "ok",
+  "engine": "RAG Python FastAPI Clean Arch"
 }
 ```
 
 ## Readiness y métricas
 
-- `GET /ready`: verifica que Qdrant y el modelo de embeddings están disponibles.
+- `GET /ready`: verifica que Qdrant está disponible para atender búsquedas. El modelo de embeddings se carga al iniciar el proceso.
 - `GET /metrics`: expone métricas Prometheus de HTTP, embeddings, retrieval y Qdrant.
 
 El servicio escribe logs JSON en stdout y propaga el contexto W3C `traceparent`. Las trazas se exportan a Tempo cuando `OTEL_EXPORTER_OTLP_ENDPOINT` está configurado.
@@ -264,6 +265,8 @@ El mapa de dominios se configura con `MCP_DOMAIN_COLLECTIONS`, por ejemplo:
 ```json
 {"technical_manuals":"manuales_tecnicos"}
 ```
+
+La clave `technical_manuals` debe estar presente en el mapa porque la tool `search_technical_manuals` la consulta directamente.
 
 El servidor comparte el proveedor de embeddings y mantiene una caché de `RAGService` por colección. MCP se expone en `http://localhost:8001/mcp` cuando se ejecuta con Docker Compose.
 

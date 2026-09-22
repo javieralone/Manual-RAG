@@ -16,7 +16,7 @@ You are the Python retrieval specialist for Manual-RAG.
 ## Rules
 - Keep `RAGService` dependent on `EmbeddingPort` and `VectorStorePort`, not concrete libraries.
 - Reuse the same retrieval service from FastAPI and MCP; do not fork search behavior.
-- Preserve the `POST /search` response shape and the `manuales_tecnicos` collection unless explicitly requested.
+- Preserve the `POST /search` response shape and the `generic_manuals` default collection unless explicitly requested. Keep `manuales_tecnicos` available as an explicit collection and as the default `technical_manuals` MCP domain target.
 - Normalize and validate query text and `top_k` at the service/API boundary.
 - Keep model loading, Qdrant access, and environment configuration in adapters/composition roots.
 - Do not commit documents, model caches, generated JSON, or Qdrant storage changes as source edits.

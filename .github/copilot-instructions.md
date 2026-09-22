@@ -5,7 +5,7 @@
 - `api-go` is the public HTTP gateway and owns query orchestration, timeouts, cancellation, and concurrency limits.
 - `rag-engine` is the Python retrieval service and MCP server. It owns embeddings, vector search, ingestion scripts, and retrieval DTOs.
 - `frontend` is the React + Vite UI for login, chat, collection selection and streaming query mode.
-- Qdrant collection: `manuales_tecnicos`.
+- Qdrant default collection: `generic_manuals`; `manuales_tecnicos` is an explicit supported collection and the default target for the `technical_manuals` MCP domain.
 - Main runtime endpoints: Go `:8080`, RAG `:8000`, MCP `:8001`, Qdrant `:6333`, frontend `:5173`.
 
 ## Architecture invariants

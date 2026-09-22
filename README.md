@@ -619,7 +619,7 @@ go test ./...
 | `rag-engine` | Recuperación semántica y API interna | Genera embeddings de preguntas con `bge-m3`, realiza búsquedas vectoriales y construye el contexto para el LLM. |
 | `qdrant` | Base de datos vectorial | Almacena los vectores semánticos de los manuales y ejecuta búsquedas de similitud en tiempo real. |
 | `mcp-server` | Servidor MCP para agentes | Expone las herramientas y capacidades del sistema RAG para integrarse con clientes y agentes compatibles con MCP. |
-| `ollama` | Generación de respuestas mediante un LLM | Ejecuta el modelo de lenguaje en local para redactar respuestas precisas utilizando el contexto recuperado. |
+| Ollama (externo) | Generación de respuestas mediante un LLM | Debe ejecutarse en el equipo host; `api-go` lo alcanza mediante `host.docker.internal:11434`. No es un servicio definido en Docker Compose. |
 | `prometheus` | Recolector de métricas | Mide en tiempo real la latencia, tráfico, tasa de errores y disponibilidad de los componentes de la aplicación. |
 | `grafana` | Visualización y paneles | Dashboard unificado que muestra gráficas de rendimiento, alertas activas y logs de la infraestructura. |
 | `loki` | Almacenamiento y gestión de logs | Agrupa y centraliza los registros de texto emitidos por las aplicaciones para diagnosticar fallos y errores. |
@@ -649,7 +649,7 @@ REQUEST_TIMEOUT=5m
 
 El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, el valor por defecto `generic_manuals` para la colección y el modelo de embeddings `BAAI/bge-m3`. La colección puede seleccionarse explícitamente desde la API, MCP o la ingesta, y `manuales_tecnicos` sigue funcionando como una colección independiente y compatible. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
 
-El servidor MCP usa `MCP_PORT=8001` y el mapa `MCP_DOMAIN_COLLECTIONS` para asociar tools de dominio con colecciones Qdrant. En el Compose actual, `technical_manuals` apunta a `manuales_tecnicos`.
+El servidor MCP usa `MCP_PORT=8001` y el mapa `MCP_DOMAIN_COLLECTIONS` para asociar tools de dominio con colecciones Qdrant. El mapa debe incluir la clave `technical_manuals`; en el Compose actual apunta a `manuales_tecnicos`.
 
 No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
@@ -752,27 +752,23 @@ El directorio `qdrant_storage/` se monta directamente desde el host, por lo que 
 
 ---
 
-## 🛣️ Próximas mejoras
+## 🛣️ Estado y próximas mejoras
 
-El roadmap del proyecto puede enfocarse en tres grandes líneas: mejor experiencia de usuario, escalabilidad y calidad del RAG.
+### Capacidades ya implementadas
 
-### Experiencia y acceso
+- Interfaz web React + Vite con login, selección de colección, chat y consulta normal o streaming.
+- Evaluación automática del RAG con métricas de precisión, recall, groundedness y latencia.
+- OCR optimizado para manuales escaneados, con control de resolución, idioma y uso de memoria.
+- Soporte multi-colección y multi-manual, con filtros por documento, capítulo y sección.
+- Servidor MCP con herramientas por dominio y selección explícita de colección.
+- Observabilidad base con métricas Prometheus, logs JSON, trazas OpenTelemetry, Grafana, Loki y Tempo.
 
-- Desarrollar una interfaz web para consultar el sistema sin usar curl o clientes HTTP.
-- Añadir paneles de administración para revisar consultas, contexto recuperado y métricas de uso.
-- Mejorar la experiencia de autenticación y autorización para múltiples roles y permisos.
+### Pendientes
 
-### Calidad del RAG
-
-- Añadir evaluación automática de calidad de respuestas mediante groundedness, relevancia y precisión del contexto.
-- Soportar múltiples colecciones o índices por familia de manuales.
-- Mejorar la extracción de texto OCR para documentos escaneados o con baja calidad.
-
-### Operabilidad y escalabilidad
-
+- Añadir un panel administrativo operativo para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
 - Añadir una cola de trabajos para indexación asíncrona y procesamiento por lotes.
-- Extender las pruebas de integración con Docker Compose para validar flujos completos en entorno real.
-- Mejorar la observabilidad con dashboards más específicos por consulta, tiempo de recuperación y latencia de Ollama.
+- Extender las pruebas de integración con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
+- Mejorar los dashboards con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
 - Explorar estrategias de caché y reindexación incremental para reducir tiempos de respuesta y carga.
 
 ---

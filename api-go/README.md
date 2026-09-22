@@ -37,9 +37,9 @@ api-go/
 ### Single Responsibility Principle (SRP)
 
 Cada paquete tiene una responsabilidad acotada:
-
 - `QueryHandler` gestiona el protocolo HTTP.
 - `WorkerPoolUseCaseDecorator` maneja los límites de recursos.
+
 - `QueryOrchestrator` contiene la lógica de negocio y orquestación de consultas.
 
 ### Dependency Inversion Principle (DIP)
@@ -54,7 +54,6 @@ La limitación de concurrencia se implementa envolviendo el caso de uso principa
 
 Diseñado para ejecutarse de forma segura en entornos con recursos limitados de CPU y memoria.
 
----
 
 ## ⚡ Concurrencia y Control de Recursos
 
@@ -251,6 +250,8 @@ while (true) {
 ---
 
 
+
+### GET `/health`
 
 Endpoint de verificación de estado destinado a Docker y orquestadores.
 
