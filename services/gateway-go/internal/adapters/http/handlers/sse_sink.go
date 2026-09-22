@@ -12,9 +12,11 @@ import (
 // sseSink implementa ports.StreamSink escribiendo eventos Server-Sent Events directamente
 // sobre el ResponseWriter, sin acumular la respuesta completa en memoria.
 type sseSink struct {
-	w       http.ResponseWriter
-	flusher http.Flusher
-	once    sync.Once
+	w         http.ResponseWriter
+	flusher   http.Flusher
+	once      sync.Once
+	mu        sync.RWMutex
+	committed bool
 }
 
 func newSSESink(w http.ResponseWriter, flusher http.Flusher) *sseSink {
@@ -25,11 +27,20 @@ func newSSESink(w http.ResponseWriter, flusher http.Flusher) *sseSink {
 // previos al streaming (p.ej. retrieval fallido) puedan seguir devolviéndose como error HTTP normal.
 func (s *sseSink) commitHeaders() {
 	s.once.Do(func() {
+		s.mu.Lock()
+		s.committed = true
+		s.mu.Unlock()
 		s.w.Header().Set("Content-Type", "text/event-stream")
 		s.w.Header().Set("Cache-Control", "no-cache")
 		s.w.Header().Set("Connection", "keep-alive")
 		s.w.WriteHeader(http.StatusOK)
 	})
+}
+
+func (s *sseSink) headersCommitted() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.committed
 }
 
 func (s *sseSink) writeEvent(name string, payload any) error {

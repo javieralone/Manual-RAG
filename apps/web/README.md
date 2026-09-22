@@ -40,6 +40,7 @@ apps/web/
 │   ├── index.css
 │   └── main.jsx
 ├── Dockerfile
+├── nginx.conf
 ├── package.json
 ├── vite.config.js
 ├── .env.example
@@ -61,7 +62,7 @@ Contenido de ejemplo en `.env.example`.
 ## Ejecutar localmente
 
 ```bash
-cd frontend
+cd apps/web
 npm install
 npm run dev
 ```
@@ -74,11 +75,15 @@ http://localhost:5173
 
 ## Ejecutar con Docker Compose
 
-Desde la raíz del proyecto:
+Desde la raíz del proyecto, con un archivo `.env` configurado:
 
 ```bash
-docker compose up -d --build frontend
+docker compose --env-file .env up -d --build frontend
 ```
+
+La imagen de Compose compila Vite y sirve los archivos estáticos con Nginx en el puerto interno `8080`, publicado como `http://localhost:5173`.
+
+> El MVP actual conserva tokens en almacenamiento del navegador. Antes de exponerlo a Internet, migrar el refresh token a una cookie `HttpOnly`, `Secure` y `SameSite`, tal como se documenta en [production-readiness.md](../../docs/operations/production-readiness.md).
 
 ## API consumida
 

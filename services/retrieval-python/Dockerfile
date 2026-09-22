@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Evitar prompts interactivos durante la instalación
 ENV DEBIAN_FRONTEND=noninteractive
@@ -25,6 +25,9 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+RUN useradd --create-home --uid 10001 app && chown -R app:app /app
+USER app
 
 EXPOSE 8000
 

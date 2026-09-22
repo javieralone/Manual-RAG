@@ -1,7 +1,7 @@
 services:
   # 1. Base de datos vectorial
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.1
     container_name: rag_qdrant
     ports:
       - "6333:6333"
@@ -35,6 +35,9 @@ services:
       - MKL_NUM_THREADS=2
       - OTEL_SERVICE_NAME=rag-engine
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - QDRANT_TIMEOUT_SECONDS=${QDRANT_TIMEOUT_SECONDS:-5}
+      - QDRANT_RETRY_ATTEMPTS=${QDRANT_RETRY_ATTEMPTS:-2}
+      - QDRANT_RETRY_BACKOFF_SECONDS=${QDRANT_RETRY_BACKOFF_SECONDS:-0.2}
     volumes:
       - huggingface_cache:/app/.cache/huggingface  # Guarda el modelo en el volumen
       - ./data/documents:/app/documents
@@ -52,6 +55,7 @@ services:
       qdrant:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # 2b. Servidor MCP para GitHub Copilot / clientes MCP
   mcp-server:
@@ -84,7 +88,13 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8001), 2).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # 3. API Gateway en Go
   api-go:
@@ -114,6 +124,11 @@ services:
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-5m}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-5m}
       - READINESS_INTERVAL=${READINESS_INTERVAL:-15s}
+      - SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT:-15s}
+      - DEPENDENCY_RETRY_ATTEMPTS=${DEPENDENCY_RETRY_ATTEMPTS:-2}
+      - DEPENDENCY_RETRY_BACKOFF=${DEPENDENCY_RETRY_BACKOFF:-200ms}
+      - CIRCUIT_BREAKER_FAILURES=${CIRCUIT_BREAKER_FAILURES:-5}
+      - CIRCUIT_BREAKER_RESET=${CIRCUIT_BREAKER_RESET:-30s}
       - OTEL_SERVICE_NAME=api-go
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     extra_hosts:
@@ -124,20 +139,33 @@ services:
           memory: 256m
     depends_on:
       rag-engine:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    stop_grace_period: 20s
 
   frontend:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     container_name: rag_frontend
     ports:
-      - "5173:5173"
+      - "5173:8080"
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
     depends_on:
       - api-go
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   prometheus:
@@ -164,7 +192,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro

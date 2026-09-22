@@ -20,14 +20,21 @@ type OllamaClient struct {
 	modelName  string
 	httpClient *http.Client
 	metrics    *observability.Metrics
+	breaker    *circuitBreaker
+	retries    int
+	backoff    time.Duration
 }
 
-func NewOllamaClient(baseURL string, modelName string, httpClient *http.Client, metrics *observability.Metrics) *OllamaClient {
+func NewOllamaClient(baseURL string, modelName string, httpClient *http.Client, metrics *observability.Metrics, values ...ResilienceConfig) *OllamaClient {
+	config := configuredResilience(values)
 	return &OllamaClient{
 		baseURL:    baseURL,
 		modelName:  modelName,
 		httpClient: httpClient,
 		metrics:    metrics,
+		breaker:    newCircuitBreaker(config.MaxFailures, config.ResetAfter),
+		retries:    config.Retries,
+		backoff:    config.Backoff,
 	}
 }
 
@@ -93,11 +100,29 @@ func (c *OllamaClient) GenerateAnswer(ctx context.Context, question string, chun
 
 	// 3. Ejecutar la llamada
 	started := time.Now()
-	resp, err := c.httpClient.Do(req)
+	if !c.breaker.allow() {
+		return "", ErrCircuitOpen
+	}
+	var resp *http.Response
+	for attempt := 0; attempt <= c.retries; attempt++ {
+		resp, err = c.httpClient.Do(req)
+		if err == nil && resp.StatusCode < http.StatusInternalServerError {
+			break
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		if attempt < c.retries {
+			if waitErr := retryDelay(ctx, c.backoff, attempt); waitErr != nil {
+				return "", waitErr
+			}
+		}
+	}
 	if c.metrics != nil {
 		c.metrics.DependencyDuration.WithLabelValues("ollama").Observe(time.Since(started).Seconds())
 	}
 	if err != nil {
+		c.breaker.failure()
 		if c.metrics != nil {
 			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
 		}
@@ -106,11 +131,13 @@ func (c *OllamaClient) GenerateAnswer(ctx context.Context, question string, chun
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breaker.failure()
 		if c.metrics != nil {
 			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
 		}
 		return "", fmt.Errorf("Ollama devolvió un estado no esperado: %d", resp.StatusCode)
 	}
+	c.breaker.success()
 	if c.metrics != nil {
 		c.metrics.DependencyTotal.WithLabelValues("ollama", "success").Inc()
 	}
@@ -155,8 +182,12 @@ func (c *OllamaClient) GenerateAnswerStream(ctx context.Context, question string
 	observability.InjectTraceContext(ctx, req.Header)
 
 	started := time.Now()
+	if !c.breaker.allow() {
+		return 0, ErrCircuitOpen
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breaker.failure()
 		if c.metrics != nil {
 			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
 		}
@@ -165,6 +196,7 @@ func (c *OllamaClient) GenerateAnswerStream(ctx context.Context, question string
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breaker.failure()
 		if c.metrics != nil {
 			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
 		}
@@ -211,11 +243,13 @@ func (c *OllamaClient) GenerateAnswerStream(ctx context.Context, question string
 	}
 
 	if err := scanner.Err(); err != nil {
+		c.breaker.failure()
 		if c.metrics != nil {
 			c.metrics.DependencyTotal.WithLabelValues("ollama", "error").Inc()
 		}
 		return tokenCount, fmt.Errorf("error leyendo stream de Ollama: %w", err)
 	}
+	c.breaker.success()
 
 	if c.metrics != nil {
 		elapsed := time.Since(started).Seconds()

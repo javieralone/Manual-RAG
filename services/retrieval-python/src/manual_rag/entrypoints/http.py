@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
@@ -30,10 +31,21 @@ if otlp_endpoint:
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)))
     trace.set_tracer_provider(provider)
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    if otlp_endpoint:
+        current_provider = trace.get_tracer_provider()
+        shutdown = getattr(current_provider, "shutdown", None)
+        if shutdown:
+            shutdown()
+
 app = FastAPI(
     title="RAG Engine Internal API",
     description="Servicio interno en Python para embeddings y búsqueda vectorial.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 FastAPIInstrumentor.instrument_app(app)
 

@@ -1,5 +1,5 @@
 # Etapa 1: Compilación
-FROM golang:1.27-alpine AS builder
+FROM golang:1.27-alpine3.21 AS builder
 
 WORKDIR /app
 
@@ -9,9 +9,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /api-gateway ./cmd/api/main.go
 
 # Etapa 2: Imagen ejecutable ultra ligera
-FROM alpine:latest
+FROM alpine:3.21
 WORKDIR /app
 COPY --from=builder /api-gateway .
+RUN addgroup -S app && adduser -S -G app app && chown app:app /app/api-gateway
+USER app
 
 EXPOSE 8080
 CMD ["./api-gateway"]

@@ -68,7 +68,13 @@ func (h *QueryHandler) HandleQueryStream(w http.ResponseWriter, r *http.Request)
 	}
 
 	sink := newSSESink(w, flusher)
-	_ = h.executeQueryStream(r, req, sink)
+	if err := h.executeQueryStream(r, req, sink); err != nil {
+		if !sink.headersCommitted() {
+			http.Error(w, `{"error":"Error procesando el streaming"}`, http.StatusInternalServerError)
+			return
+		}
+		_ = sink.SendError(err)
+	}
 }
 
 func (h *QueryHandler) executeQuery(r *http.Request, req HTTPQueryRequest) (*domain.QueryResponse, error) {

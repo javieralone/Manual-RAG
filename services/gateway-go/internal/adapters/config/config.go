@@ -19,6 +19,11 @@ type Config struct {
 	HTTPClientTimeout time.Duration
 	RequestTimeout    time.Duration
 	ReadinessInterval time.Duration
+	ShutdownTimeout   time.Duration
+	RetryAttempts     int
+	RetryBackoff      time.Duration
+	CircuitFailures   int
+	CircuitReset      time.Duration
 	WorkerLimit       int
 	RateLimitEnabled  bool
 	RateLimitRequests int
@@ -81,6 +86,26 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	shutdownTimeout, err := durationEnv("SHUTDOWN_TIMEOUT", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	retryAttempts, err := intEnv("DEPENDENCY_RETRY_ATTEMPTS", 2)
+	if err != nil || retryAttempts < 0 || retryAttempts > 5 {
+		return Config{}, errors.New("DEPENDENCY_RETRY_ATTEMPTS debe estar entre 0 y 5")
+	}
+	retryBackoff, err := durationEnv("DEPENDENCY_RETRY_BACKOFF", 200*time.Millisecond)
+	if err != nil {
+		return Config{}, err
+	}
+	circuitFailures, err := intEnv("CIRCUIT_BREAKER_FAILURES", 5)
+	if err != nil || circuitFailures < 1 {
+		return Config{}, errors.New("CIRCUIT_BREAKER_FAILURES debe ser un entero positivo")
+	}
+	circuitReset, err := durationEnv("CIRCUIT_BREAKER_RESET", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	rateLimitRequests, err := intEnv("RATE_LIMIT_REQUESTS", 60)
 	if err != nil || rateLimitRequests < 1 {
 		return Config{}, errors.New("RATE_LIMIT_REQUESTS debe ser un entero positivo")
@@ -103,6 +128,11 @@ func Load() (Config, error) {
 		HTTPClientTimeout: httpClientTimeout,
 		RequestTimeout:    requestTimeout,
 		ReadinessInterval: readinessInterval,
+		ShutdownTimeout:   shutdownTimeout,
+		RetryAttempts:     retryAttempts,
+		RetryBackoff:      retryBackoff,
+		CircuitFailures:   circuitFailures,
+		CircuitReset:      circuitReset,
 		WorkerLimit:       workerLimit,
 		RateLimitEnabled:  boolEnv("RATE_LIMIT_ENABLED", true),
 		RateLimitRequests: rateLimitRequests,

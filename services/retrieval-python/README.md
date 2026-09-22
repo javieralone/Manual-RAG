@@ -175,10 +175,10 @@ POST /search
 
 ## OCR e indexación
 
-Los PDFs pendientes deben colgarse en `../data/documents/new/<nombre_coleccion>/`. El orquestador oficial es `process_manual_opt.py`:
+Los PDFs pendientes deben colgarse en `data/documents/new/<nombre_coleccion>/` cuando los comandos se ejecutan desde la raíz. El orquestador oficial es `services/retrieval-python/scripts/process_manual_opt.py`:
 
 ```powershell
-python scripts/process_manual_opt.py `
+python services/retrieval-python/scripts/process_manual_opt.py `
   --fast-ocr `
   --workers 2 `
   --memory-mode disk
@@ -187,9 +187,9 @@ python scripts/process_manual_opt.py `
 La colección se deriva de la carpeta y se mantiene a lo largo del flujo:
 
 ```text
-../data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
-../data/documents/reading/manuales_tecnicos/<nombre-manual>__parte-001.pdf
-../data/documents/completed/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+data/documents/reading/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+data/documents/completed/manuales_tecnicos/<nombre-manual>__parte-001.pdf
 ```
 
 `process_manual_opt.py` mueve el PDF a `reading`, ejecuta OCR, genera chunks, carga en Qdrant y solo al final lo mueve a `completed`. Si falla, lo devuelve a `new` y registra el error en `../logs/ingestion.log`.
@@ -197,8 +197,8 @@ La colección se deriva de la carpeta y se mantiene a lo largo del flujo:
 Para varias partes del mismo manual usa un identificador común:
 
 ```text
-../data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
-../data/documents/new/manuales_tecnicos/<nombre-manual>__parte-002.pdf
+data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+data/documents/new/manuales_tecnicos/<nombre-manual>__parte-002.pdf
 ```
 
 Las partes se cargan dentro de la colección indicada con el mismo `document_id` y un número de parte distinto. Los IDs de Qdrant son deterministas, así que reintentar una parte no duplica sus puntos.
@@ -207,8 +207,8 @@ Para manuales escaneados, el script OCR permite configurar el documento, la sali
 
 ```bash
 python scripts/ocr_manual_opt.py \
-  --pdf ../data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
-  --output ../data/artifacts/manual_pages.json \
+  --pdf data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
+  --output data/artifacts/manual_pages.json \
   --collection manuales_tecnicos \
   --dpi 200 \
   --language spa
@@ -243,7 +243,7 @@ Después de regenerar el JSON, ejecuta `index_manual.py` y `upload_to_qdrant.py 
 El archivo:
 
 ```text
-app/mcp_server.py
+src/manual_rag/entrypoints/mcp.py
 ```
 
 expone las herramientas MCP:
@@ -263,7 +263,7 @@ El mapa de dominios se configura con `MCP_DOMAIN_COLLECTIONS`, por ejemplo:
 
 La clave `technical_manuals` debe estar presente en el mapa porque la tool `search_technical_manuals` la consulta directamente.
 
-El servidor comparte el proveedor de embeddings y mantiene una caché de `RAGService` por colección. MCP se expone en `http://localhost:8001/mcp` cuando se ejecuta con Docker Compose.
+El servidor comparte el proveedor de embeddings y mantiene una caché de `RAGService` por colección. El wrapper compatible `app/mcp_server.py` delega en `src/manual_rag/entrypoints/mcp.py`. MCP se expone en `http://localhost:8001/mcp` cuando se ejecuta con Docker Compose.
 
 Iniciar localmente:
 

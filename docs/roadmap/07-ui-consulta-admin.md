@@ -32,7 +32,7 @@ Este MVP prioriza la experiencia mínima útil para validar el flujo completo de
 ### 1. Login
 
 - La pantalla de login debe llamar a `POST /api/v1/auth/login` del gateway Go.
-- Debe almacenar el `access_token` en sesión o localStorage para uso interno del cliente.
+- El MVP actual puede conservar el `access_token` en sesión para uso interno; antes de producción, el refresh token debe migrarse a una cookie `HttpOnly`, `Secure` y `SameSite` con protección CSRF.
 - Si la autenticación falla, debe mostrar un mensaje claro.
 
 ### 2. Selector de colección

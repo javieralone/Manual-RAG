@@ -9,9 +9,11 @@ from manual_rag.observability import errors_total, qdrant_duration
 from opentelemetry import trace
 
 class QdrantAdapter(VectorStorePort):
-    def __init__(self, host: str, port: int, collection_name: str = "manuales_tecnicos"):
-        self._client = QdrantClient(host=host, port=port)
+    def __init__(self, host: str, port: int, collection_name: str = "manuales_tecnicos", timeout: float = 5.0, retries: int = 2, retry_backoff: float = 0.2):
+        self._client = QdrantClient(host=host, port=port, timeout=timeout)
         self._collection_name = collection_name
+        self._retries = max(0, retries)
+        self._retry_backoff = max(0.0, retry_backoff)
 
     def search_similar(
         self,
@@ -25,12 +27,22 @@ class QdrantAdapter(VectorStorePort):
         collection = resolve_collection(collection_name or self._collection_name)
         with tracer.start_as_current_span("qdrant.query"):
             try:
-                response = self._client.query_points(
-                    collection_name=collection,
-                    query=query_vector,
-                    limit=top_k,
-                    query_filter=self._build_filter(filters),
-                )
+                response = None
+                for attempt in range(self._retries + 1):
+                    try:
+                        response = self._client.query_points(
+                            collection_name=collection,
+                            query=query_vector,
+                            limit=top_k,
+                            query_filter=self._build_filter(filters),
+                        )
+                        break
+                    except UnexpectedResponse:
+                        raise
+                    except Exception:
+                        if attempt >= self._retries:
+                            raise
+                        time.sleep(self._retry_backoff * (2**attempt))
             
                 results = []
                 for point in response.points:

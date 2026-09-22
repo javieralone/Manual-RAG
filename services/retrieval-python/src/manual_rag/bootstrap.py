@@ -8,6 +8,9 @@ from manual_rag.domain.schemas import DEFAULT_COLLECTION, resolve_collection
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
+QDRANT_TIMEOUT = float(os.getenv("QDRANT_TIMEOUT_SECONDS", "5"))
+QDRANT_RETRIES = int(os.getenv("QDRANT_RETRY_ATTEMPTS", "2"))
+QDRANT_RETRY_BACKOFF = float(os.getenv("QDRANT_RETRY_BACKOFF_SECONDS", "0.2"))
 DEFAULT_QDRANT_COLLECTION = os.getenv("DEFAULT_COLLECTION", DEFAULT_COLLECTION)
 
 
@@ -22,6 +25,9 @@ def get_qdrant_adapter(collection: str = DEFAULT_QDRANT_COLLECTION) -> QdrantAda
         host=QDRANT_HOST,
         port=QDRANT_PORT,
         collection_name=resolve_collection(collection),
+        timeout=QDRANT_TIMEOUT,
+        retries=QDRANT_RETRIES,
+        retry_backoff=QDRANT_RETRY_BACKOFF,
     )
 
 

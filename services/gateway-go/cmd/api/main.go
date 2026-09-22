@@ -4,7 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -16,8 +20,8 @@ import (
 	"api-go/internal/adapters/http/handlers"
 	"api-go/internal/adapters/http/middlewares"
 	"api-go/internal/adapters/observability"
-	"api-go/internal/core/domain"
 	"api-go/internal/application/use_cases"
+	"api-go/internal/core/domain"
 )
 
 func main() {
@@ -37,8 +41,9 @@ func main() {
 	logger := observability.NewLogger()
 
 	// 1. Adaptadores Secundarios
-	ragAdapter := clients.NewPythonRAGClient(config.PythonEngineURL, httpClient, metrics)
-	ollamaAdapter := clients.NewOllamaClient(config.OllamaURL, config.OllamaModel, httpClient, metrics)
+	resilience := clients.ResilienceConfig{Retries: config.RetryAttempts, Backoff: config.RetryBackoff, MaxFailures: config.CircuitFailures, ResetAfter: config.CircuitReset}
+	ragAdapter := clients.NewPythonRAGClient(config.PythonEngineURL, httpClient, metrics, resilience)
+	ollamaAdapter := clients.NewOllamaClient(config.OllamaURL, config.OllamaModel, httpClient, metrics, resilience)
 	tokenService, err := authadapters.NewJWTService(
 		config.Auth.JWTSecret,
 		config.Auth.RefreshSecret,
@@ -67,7 +72,7 @@ func main() {
 	queryHandler := handlers.NewQueryHandler(useCaseWithWorkerPool)
 	authHandler := handlers.NewAuthHandler(authService, logger, metrics)
 	healthHandler := handlers.NewHealthHandler(metrics,
-		clients.NewURLHealthChecker(strings.TrimRight(config.PythonEngineURL, "/")+"/health", httpClient),
+		clients.NewURLHealthChecker(strings.TrimRight(config.PythonEngineURL, "/")+"/ready", httpClient),
 		clients.NewURLHealthChecker(strings.TrimRight(config.OllamaURL, "/")+"/api/tags", httpClient),
 	)
 	readinessContext, cancelReadiness := context.WithCancel(context.Background())
@@ -84,8 +89,23 @@ func main() {
 	router := adaptersHTTP.NewRouter(queryHandler, authHandler, healthHandler, authenticate, authorize, rateLimit)
 	handlerWithMiddleware := middlewares.CORSMiddleware()(middlewares.TraceMiddleware(middlewares.MetricsMiddleware(metrics)(middlewares.TimeoutMiddleware(config.RequestTimeout)(router))))
 
+	server := &http.Server{Addr: config.HTTPPort, Handler: handlerWithMiddleware, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: config.RequestTimeout, IdleTimeout: 60 * time.Second}
+	serverErrors := make(chan error, 1)
+	go func() { serverErrors <- server.ListenAndServe() }()
 	logger.Info("api_gateway_started", "port", config.HTTPPort, "worker_limit", config.WorkerLimit, "readiness_interval", config.ReadinessInterval.String())
-	if err := http.ListenAndServe(config.HTTPPort, handlerWithMiddleware); err != nil {
-		log.Fatalf("Error iniciando servidor: %v", err)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error iniciando servidor: %v", err)
+		}
+	case <-signals:
+		shutdownContext, cancel := context.WithTimeout(context.Background(), config.ShutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownContext); err != nil {
+			log.Printf("shutdown incompleto: %v", err)
+		}
+		_ = shutdownTracer(shutdownContext)
 	}
 }

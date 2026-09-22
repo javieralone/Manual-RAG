@@ -602,6 +602,8 @@ El servidor MCP se inicia por separado en el puerto `8001`:
 PYTHONPATH=src python -m manual_rag.entrypoints.mcp
 ```
 
+La validación final de arquitectura está documentada en [docs/architecture/final-validation.md](docs/architecture/final-validation.md). La puesta en producción requiere además cerrar el checklist de [docs/operations/production-readiness.md](docs/operations/production-readiness.md).
+
 ### Ejecutar el API Gateway en Go
 
 ```bash
@@ -782,6 +784,8 @@ El directorio `data/local/qdrant/` se monta directamente desde el host, por lo q
 ---
 
 ## 📈 Observabilidad
+
+La revisión de preparación productiva y su checklist están en [docs/operations/production-readiness.md](docs/operations/production-readiness.md).
 
 El sistema incluye observabilidad end-to-end:
 
