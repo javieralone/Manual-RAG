@@ -103,6 +103,9 @@ Y también puede usarse explícitamente `manuales_tecnicos` u otra colección v�
 |-----------|------------|------------------|
 | `QDRANT_HOST` | Host de Qdrant | `qdrant` |
 | `QDRANT_PORT` | Puerto HTTP de Qdrant | `6333` |
+| `DEFAULT_COLLECTION` | Colección usada cuando no se indica otra | `generic_manuals` |
+| `MCP_DOMAIN_COLLECTIONS` | Mapa JSON de dominio MCP a colección Qdrant | `{"technical_manuals":"manuales_tecnicos"}` |
+| `MCP_PORT` | Puerto del servidor MCP | `8001` |
 | `OMP_NUM_THREADS` | Hilos para CPU | `2` |
 | `MKL_NUM_THREADS` | Hilos MKL | `2` |
 
@@ -113,7 +116,7 @@ Y también puede usarse explícitamente `manuales_tecnicos` u otra colección v�
 Construir y levantar el servicio:
 
 ```powershell
-docker compose up -d --build rag-engine
+docker compose up -d --build rag-engine mcp-server
 ```
 
 Consultar logs:
@@ -252,10 +255,17 @@ expone las herramientas MCP:
 ```python
 search_manual(query: str, top_k: int = 3, collection: str = "generic_manuals") -> str
 search_technical_manuals(query: str, top_k: int = 3) -> str
-search_parts_catalog(query: str, top_k: int = 3) -> str
 ```
 
-`search_manual` conserva la compatibilidad existente y permite seleccionar una colección. Las tools especializadas usan el mapa definido en `MCP_DOMAIN_COLLECTIONS`; cada búsqueda aplica los filtros opcionales `document_id`, `chapter` y `section`, y devuelve colección, documento, fuente, página y parte cuando están disponibles. El modelo `BAAI/bge-m3` se comparte entre los servicios RAG cacheados por colección.
+`search_manual` conserva la compatibilidad existente, usa `generic_manuals` por defecto y permite seleccionar una colección explícita. `search_technical_manuals` consulta la colección configurada para el dominio `technical_manuals`. Ambas tools aceptan los filtros opcionales `document_id`, `chapter` y `section`, y devuelven colección, documento, fuente, página y parte cuando están disponibles.
+
+El mapa de dominios se configura con `MCP_DOMAIN_COLLECTIONS`, por ejemplo:
+
+```json
+{"technical_manuals":"manuales_tecnicos"}
+```
+
+El servidor comparte el proveedor de embeddings y mantiene una caché de `RAGService` por colección. MCP se expone en `http://localhost:8001/mcp` cuando se ejecuta con Docker Compose.
 
 Iniciar localmente:
 

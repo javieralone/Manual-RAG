@@ -410,13 +410,16 @@ documents/new/manual-reparaciones-valiant__parte-001.pdf
 documents/new/manual-reparaciones-valiant__parte-002.pdf
 ```
 
-Ejecuta el orquestador desde la raíz del proyecto:
+Ejecuta el orquestador oficial desde la raíz del proyecto:
 
-```bash
-python rag-engine/scripts/process_manual.py
+```powershell
+python rag-engine/scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
 ```
 
-`process_manual.py` toma todos los PDFs de `documents/new`, mueve cada uno a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si las tres etapas terminan correctamente. Si falla, vuelve a `new` y registra el error en `logs/ingestion.log`. Un lock impide ejecutar dos ingestas simultáneas.
+`process_manual_opt.py` toma un PDF cada vez de `documents/new/<nombre_coleccion>`, lo mueve a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si todas las etapas terminan correctamente. Si falla o se interrumpe, vuelve a `new` y registra el error en `logs/ingestion.log`.
 
 La ingesta sigue el patrón de carpetas `documents/new/<nombre_coleccion>/`, `documents/reading/<nombre_coleccion>/` y `documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
 
@@ -521,6 +524,21 @@ Configuración actual:
 
 Esto permite que agentes compatibles con MCP puedan consultar el sistema RAG mediante herramientas externas.
 
+El servidor expone actualmente estas tools:
+
+```text
+search_manual(query, top_k=3, collection="generic_manuals", document_id=None, chapter=None, section=None)
+search_technical_manuals(query, top_k=3, document_id=None, chapter=None, section=None)
+```
+
+`search_manual` permite consultar cualquier colección válida de forma explícita. `search_technical_manuals` fija la colección del dominio técnico mediante `MCP_DOMAIN_COLLECTIONS`. Las consultas vacías y los valores de `top_k` fuera del rango `1..20` se rechazan.
+
+Para probarlo desde Copilot Chat, activa el servidor `manual-rag` y solicita, por ejemplo:
+
+```text
+Usa search_technical_manuals para buscar el procedimiento de mantenimiento del sistema de lubricación.
+```
+
 ---
 
 ## 🧪 Desarrollo local
@@ -619,6 +637,8 @@ REQUEST_TIMEOUT=5m
 ```
 
 El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, el valor por defecto `generic_manuals` para la colección y el modelo de embeddings `BAAI/bge-m3`. La colección puede seleccionarse explícitamente desde la API, MCP o la ingesta, y `manuales_tecnicos` sigue funcionando como una colección independiente y compatible. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
+
+El servidor MCP usa `MCP_PORT=8001` y el mapa `MCP_DOMAIN_COLLECTIONS` para asociar tools de dominio con colecciones Qdrant. En el Compose actual, `technical_manuals` apunta a `manuales_tecnicos`.
 
 No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
