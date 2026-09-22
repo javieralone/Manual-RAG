@@ -66,6 +66,8 @@ services:
       - HF_HOME=/app/.cache/huggingface
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - DEFAULT_COLLECTION=generic_manuals
+      - MCP_DOMAIN_COLLECTIONS={"technical_manuals":"manuales_tecnicos"}
       - MCP_PORT=8001
       - OMP_NUM_THREADS=2
       - MKL_NUM_THREADS=2

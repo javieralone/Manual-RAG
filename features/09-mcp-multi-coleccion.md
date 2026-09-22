@@ -20,7 +20,7 @@ Ejemplos:
 
 ```text
 search_technical_manuals
-search_parts_catalog
+search_generic_manuals
 ```
 
 Las Tools no implementarán embeddings ni acceso directo a Qdrant. Delegarán en el `RAGService`, que reutilizará el proveedor de embeddings y seleccionará el adapter Qdrant de la colección solicitada.
@@ -84,7 +84,7 @@ Las nuevas Tools específicas por dominio deben fijar explícitamente la colecci
 
 ```text
 search_technical_manuals(query, top_k=3, document_id=None)
-search_parts_catalog(query, top_k=3, document_id=None)
+search_generic_manuals(query, top_k=3, document_id=None)
 ```
 
 Cada Tool debe:

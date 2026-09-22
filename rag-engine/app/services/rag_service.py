@@ -23,19 +23,12 @@ class RAGService:
 
         started = time.perf_counter()
         vector = self._embedding_provider.generate_embedding(cleaned_query)
+        search_arguments = {"query_vector": vector, "top_k": top_k}
         if filters:
-            chunks = self._vector_store.search_similar(
-                query_vector=vector,
-                top_k=top_k,
-                filters=filters,
-                collection_name=collection_name,
-            )
-        else:
-            chunks = self._vector_store.search_similar(
-                query_vector=vector,
-                top_k=top_k,
-                collection_name=collection_name,
-            )
+            search_arguments["filters"] = filters
+        if collection_name:
+            search_arguments["collection_name"] = collection_name
+        chunks = self._vector_store.search_similar(**search_arguments)
         observe_retrieval(started, len(chunks), len({chunk.source for chunk in chunks}))
 
         return SearchResponse(

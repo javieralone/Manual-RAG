@@ -5,6 +5,7 @@ from qdrant_client import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 from app.core.ports.vector_store_port import VectorStorePort
 from app.core.domain.schemas import ChunkResult
+from app.core.domain.schemas import ChunkResult, resolve_collection
 from app.observability import errors_total, qdrant_duration
 from opentelemetry import trace
 
@@ -22,7 +23,7 @@ class QdrantAdapter(VectorStorePort):
     ) -> List[ChunkResult]:
         started = time.perf_counter()
         tracer = trace.get_tracer("manual-rag/rag-engine")
-        collection = collection_name or self._collection_name
+        collection = resolve_collection(collection_name or self._collection_name)
         with tracer.start_as_current_span("qdrant.query"):
             try:
                 response = self._client.query_points(
@@ -40,6 +41,9 @@ class QdrantAdapter(VectorStorePort):
                         for key in ("page", "source", "document_id", "chapter", "section")
                         if key in payload
                     }
+                    metadata["collection"] = payload.get("collection", collection)
+                    if "part" in payload:
+                        metadata["part"] = payload["part"]
                     results.append(
                         ChunkResult(
                             page=payload.get("page", 0),

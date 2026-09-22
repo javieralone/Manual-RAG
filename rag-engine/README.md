@@ -247,11 +247,15 @@ El archivo:
 app/mcp_server.py
 ```
 
-expone la herramienta MCP:
+expone las herramientas MCP:
 
 ```python
-search_manual(query: str, top_k: int = 3) -> str
+search_manual(query: str, top_k: int = 3, collection: str = "generic_manuals") -> str
+search_technical_manuals(query: str, top_k: int = 3) -> str
+search_parts_catalog(query: str, top_k: int = 3) -> str
 ```
+
+`search_manual` conserva la compatibilidad existente y permite seleccionar una colección. Las tools especializadas usan el mapa definido en `MCP_DOMAIN_COLLECTIONS`; cada búsqueda aplica los filtros opcionales `document_id`, `chapter` y `section`, y devuelve colección, documento, fuente, página y parte cuando están disponibles. El modelo `BAAI/bge-m3` se comparte entre los servicios RAG cacheados por colección.
 
 Iniciar localmente:
 

@@ -21,12 +21,15 @@ class SearchQuery(BaseModel):
 
     @property
     def resolved_collection(self) -> str:
-        value = (self.collection or DEFAULT_COLLECTION).strip()
-        if not value or value == "default_collection":
-            return DEFAULT_COLLECTION
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
-            raise ValueError("La colección debe contener solo letras, números, guion y guion bajo")
-        return value
+        return resolve_collection(self.collection)
+
+def resolve_collection(value: Optional[str]) -> str:
+    collection = (value or DEFAULT_COLLECTION).strip()
+    if not collection or collection == "default_collection":
+        return DEFAULT_COLLECTION
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", collection):
+        raise ValueError("La colección debe contener solo letras, números, guion y guion bajo")
+    return collection
 
 class SearchResponse(BaseModel):
     query: str
