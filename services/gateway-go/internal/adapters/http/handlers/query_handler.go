@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"api-go/internal/adapters/http/response"
 	"api-go/internal/core/domain"
 	"api-go/internal/core/ports"
 )
@@ -32,45 +32,51 @@ type HTTPQueryRequest struct {
 
 func (h *QueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var req HTTPQueryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Question == "" {
-		http.Error(w, `{"error": "Formato JSON inválido o 'question' vacía"}`, http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeDecodeError(w, err)
+		return
+	}
+	if req.Question == "" {
+		response.WriteError(w, http.StatusBadRequest, "Formato JSON inválido o 'question' vacía")
 		return
 	}
 
 	result, err := h.executeQuery(r, req)
 	if err != nil {
 		if err == domain.ErrEmptyQuestion {
-			http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusBadRequest)
+			response.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
+		response.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(result)
+	response.WriteJSON(w, http.StatusOK, result)
 }
 
 // HandleQueryStream expone POST /api/v1/query/stream: retransmite metadata, tokens y el evento final
 // de Ollama vía Server-Sent Events, actuando como proxy sin reconstruir la respuesta completa.
 func (h *QueryHandler) HandleQueryStream(w http.ResponseWriter, r *http.Request) {
 	var req HTTPQueryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Question == "" {
-		http.Error(w, `{"error": "Formato JSON inválido o 'question' vacía"}`, http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeDecodeError(w, err)
+		return
+	}
+	if req.Question == "" {
+		response.WriteError(w, http.StatusBadRequest, "Formato JSON inválido o 'question' vacía")
 		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, `{"error": "streaming no soportado por el servidor"}`, http.StatusInternalServerError)
+		response.WriteError(w, http.StatusInternalServerError, "streaming no soportado por el servidor")
 		return
 	}
 
 	sink := newSSESink(w, flusher)
 	if err := h.executeQueryStream(r, req, sink); err != nil {
 		if !sink.headersCommitted() {
-			http.Error(w, `{"error":"Error procesando el streaming"}`, http.StatusInternalServerError)
+			response.WriteError(w, http.StatusInternalServerError, "Error procesando el streaming")
 			return
 		}
 		_ = sink.SendError(err)

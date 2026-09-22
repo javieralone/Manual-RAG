@@ -20,6 +20,7 @@ func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHa
 
 	mux.HandleFunc("/api/v1/auth/login", authHandler.HandleLogin)
 	mux.HandleFunc("/api/v1/auth/refresh", authHandler.HandleRefresh)
+	mux.HandleFunc("/api/v1/auth/logout", authHandler.HandleLogout)
 
 	mux.HandleFunc("/health", healthHandler.Health)
 	mux.HandleFunc("/ready", healthHandler.Ready)

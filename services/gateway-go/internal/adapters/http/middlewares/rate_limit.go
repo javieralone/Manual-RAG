@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"api-go/internal/adapters/http/response"
 	"api-go/internal/adapters/observability"
 )
 
@@ -90,7 +91,7 @@ func rejectRateLimit(w http.ResponseWriter, logger *slog.Logger, metrics *observ
 		seconds = 1
 	}
 	w.Header().Set("Retry-After", fmt.Sprintf("%d", seconds))
-	writeJSONError(w, http.StatusTooManyRequests, "límite de peticiones excedido")
+	response.WriteError(w, http.StatusTooManyRequests, "límite de peticiones excedido")
 }
 
 func clientIP(r *http.Request) string {

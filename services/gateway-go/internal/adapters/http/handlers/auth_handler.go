@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 
 	"api-go/internal/adapters/observability"
+	"api-go/internal/adapters/http/response"
 	"api-go/internal/core/domain"
 	"api-go/internal/core/ports"
 )
@@ -15,13 +15,19 @@ type AuthHandler struct {
 	service ports.AuthService
 	logger  *slog.Logger
 	metrics *observability.Metrics
+	cookie  RefreshCookieConfig
 }
 
-func NewAuthHandler(service ports.AuthService, logger *slog.Logger, metrics *observability.Metrics) *AuthHandler {
+type RefreshCookieConfig struct {
+	Secure bool
+	MaxAge int
+}
+
+func NewAuthHandler(service ports.AuthService, logger *slog.Logger, metrics *observability.Metrics, cookie RefreshCookieConfig) *AuthHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &AuthHandler{service: service, logger: logger, metrics: metrics}
+	return &AuthHandler{service: service, logger: logger, metrics: metrics, cookie: cookie}
 }
 
 type loginRequest struct {
@@ -35,8 +41,8 @@ type refreshRequest struct {
 
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "formato JSON inválido")
+	if err := decodeJSON(r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 
@@ -46,19 +52,20 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			h.metrics.AuthTotal.WithLabelValues("login", "failure").Inc()
 		}
 		h.logger.Warn("authentication_failed", "remote_addr", r.RemoteAddr)
-		writeAuthError(w, http.StatusUnauthorized, "credenciales inválidas")
+		writeAuthServiceError(w, err, "credenciales inválidas")
 		return
 	}
 	if h.metrics != nil {
 		h.metrics.AuthTotal.WithLabelValues("login", "success").Inc()
 	}
-	writeAuthJSON(w, http.StatusOK, pair)
+	h.setRefreshCookie(w, pair.RefreshToken)
+	response.WriteJSON(w, http.StatusOK, pair)
 }
 
 func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
-	var request refreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "formato JSON inválido")
+	request, err := refreshRequestFromCookie(r)
+	if err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 
@@ -68,25 +75,49 @@ func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 			h.metrics.AuthTotal.WithLabelValues("refresh", "failure").Inc()
 		}
 		h.logger.Warn("refresh_token_failed", "remote_addr", r.RemoteAddr)
-		status := http.StatusUnauthorized
-		if !errors.Is(err, domain.ErrInvalidToken) {
-			status = http.StatusInternalServerError
-		}
-		writeAuthError(w, status, "refresh token inválido o expirado")
+		writeAuthServiceError(w, err, "refresh token inválido o expirado")
 		return
 	}
 	if h.metrics != nil {
 		h.metrics.AuthTotal.WithLabelValues("refresh", "success").Inc()
 	}
-	writeAuthJSON(w, http.StatusOK, pair)
+	h.setRefreshCookie(w, pair.RefreshToken)
+	response.WriteJSON(w, http.StatusOK, pair)
 }
 
-func writeAuthJSON(w http.ResponseWriter, status int, value interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	request, err := refreshRequestFromCookie(r)
+	if err == nil {
+		err = h.service.Logout(r.Context(), request.RefreshToken)
+	}
+	h.clearRefreshCookie(w)
+	if err != nil && !errors.Is(err, domain.ErrInvalidToken) {
+		writeAuthServiceError(w, err, "no se pudo cerrar la sesión")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeAuthError(w http.ResponseWriter, status int, message string) {
-	writeAuthJSON(w, status, map[string]string{"error": message})
+func refreshRequestFromCookie(r *http.Request) (refreshRequest, error) {
+	cookie, err := r.Cookie("manual_rag_refresh")
+	if err != nil || cookie.Value == "" {
+		return refreshRequest{}, err
+	}
+	return refreshRequest{RefreshToken: cookie.Value}, nil
+}
+
+func (h *AuthHandler) setRefreshCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{Name: "manual_rag_refresh", Value: token, Path: "/api/v1/auth", HttpOnly: true, Secure: h.cookie.Secure, SameSite: http.SameSiteLaxMode, MaxAge: h.cookie.MaxAge})
+}
+
+func (h *AuthHandler) clearRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: "manual_rag_refresh", Value: "", Path: "/api/v1/auth", HttpOnly: true, Secure: h.cookie.Secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+}
+
+func writeAuthServiceError(w http.ResponseWriter, err error, invalidMessage string) {
+	if errors.Is(err, domain.ErrSessionUnavailable) {
+		response.WriteError(w, http.StatusServiceUnavailable, "servicio de sesión no disponible")
+		return
+	}
+	response.WriteError(w, http.StatusUnauthorized, invalidMessage)
 }

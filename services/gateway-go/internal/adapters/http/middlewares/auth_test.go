@@ -22,8 +22,8 @@ func (t fakeMiddlewareTokens) ParseAccessToken(string) (domain.Identity, error) 
 	return t.identity, t.err
 }
 
-func (t fakeMiddlewareTokens) ParseRefreshToken(string) (domain.Identity, error) {
-	return t.identity, t.err
+func (t fakeMiddlewareTokens) ParseRefreshToken(string) (domain.RefreshToken, error) {
+	return domain.RefreshToken{Identity: t.identity}, t.err
 }
 
 func TestAuthenticationMiddlewareRequiresBearerToken(t *testing.T) {

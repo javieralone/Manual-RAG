@@ -100,6 +100,10 @@ Deuda restante:
 - Retries limitados con backoff.
 - Circuit breakers por dependencia en el gateway.
 - Frontend multi-stage servido por Nginx no privilegiado.
+- Overlay de producción con Nginx, Certbot y redes Docker internas.
+- Sesiones de refresh en Redis con TTL, rotación atómica y revocación.
+- Refresh token en cookie `HttpOnly`, `Secure` y `SameSite=Lax`.
+- Límite de body configurable y respuestas JSON de error centralizadas en el gateway.
 - Informe operativo de preparación productiva.
 
 ## Observabilidad
@@ -117,7 +121,7 @@ Deuda:
 - Faltan métricas de retries, circuitos abiertos, half-open y recuperaciones.
 - Faltan alertas de memoria, CPU, reinicios y saturación con ventanas temporales.
 - Promtail depende del Docker socket.
-- La observabilidad está publicada sin una red administrativa separada.
+- La red administrativa existe en el overlay de producción, pero requiere validación en un host con el despliegue completo.
 
 ## Seguridad
 
@@ -125,17 +129,18 @@ Controles presentes:
 
 - Secretos JWT y credenciales de administración obligatorios en Compose.
 - Contenedores de aplicación sin root.
-- Nginx no privilegiado y headers básicos.
+- Nginx de borde con TLS, HSTS, CSP, `Permissions-Policy` y proxy para SSE en el overlay de producción.
 - Validación de colecciones y respuestas de error genéricas.
 - No se usan tokens, prompts ni documentos como labels Prometheus.
+- Refresh sessions Redis con TTL, rotación de uso único y logout revocable.
+- Límite de request body del gateway mediante `MAX_REQUEST_BODY_BYTES`.
 
 Bloqueos antes de Internet:
 
-1. Mover refresh tokens de `localStorage` a cookies `HttpOnly`, `Secure` y `SameSite`, con CSRF.
-2. Configurar TLS y reverse proxy.
-3. No publicar Qdrant, MCP ni observabilidad fuera de una red administrativa.
-4. Añadir CSP, HSTS, `Permissions-Policy` y límites de body.
-5. Fijar imágenes por digest y escanear imágenes/dependencias.
+1. Configurar `DOMAIN`, `CERTBOT_EMAIL`, DNS y puertos `80/443`; validar emisión y renovación real de certificados.
+2. Implementar CSRF explícito y restringir CORS a orígenes configurados.
+3. Gestionar secretos fuera de variables de entorno planas y definir rotación de claves JWT.
+4. Fijar imágenes por digest y escanear imágenes/dependencias en CI.
 
 ## Escalabilidad
 
@@ -143,7 +148,7 @@ Adecuado para una instancia pequeña gracias a worker pool, timeouts, cancelaci�
 
 Limitaciones:
 
-- Rate limiting, sesiones y circuit breakers son locales por instancia.
+- Rate limiting y circuit breakers son locales por instancia; Redis permite compartir sesiones entre réplicas que apunten al mismo almacén.
 - Qdrant y Ollama son puntos únicos de fallo en la topología actual.
 - El almacenamiento de Qdrant y observabilidad es local.
 - No existe todavía una estrategia de carga para generación y streaming concurrentes.
@@ -152,7 +157,7 @@ Limitaciones:
 
 - Contratos Go/Python sin pruebas contractuales OpenAPI/JSON Schema.
 - Dependencias Python sin lockfile con hashes.
-- Usuario en memoria y sin revocación de sesiones.
+- Usuario administrativo en memoria.
 - Healthcheck MCP basado en TCP.
 - Falta de pruebas de carga y restauración de backups.
 - Falta de `govulncheck` en CI.
@@ -162,15 +167,15 @@ Limitaciones:
 
 ### P0: exposición segura
 
-- Reverse proxy, TLS y redes internas.
-- Secretos gestionados fuera de Git y rotación.
-- Escaneo de imágenes y dependencias.
+- Validar la emisión/renovación de TLS con DNS y puertos públicos reales.
+- Migrar secretos a Docker Secrets o gestor externo y definir rotación dual de JWT.
+- Fijar imágenes por digest, lockfile Python con hashes y escaneo de imágenes/dependencias en CI.
 
 ### P1: sesión y contratos
 
-- Cookies seguras, rotación/revocación y CSRF.
-- OpenAPI y pruebas contractuales Go-Python.
-- Errores HTTP centralizados y límites de request body.
+- Añadir CSRF explícito y CORS con allowlist configurada al flujo de cookies.
+- Publicar/versionar OpenAPI y añadir pruebas contractuales Go-Python.
+- Extender el límite de body y el sobre de errores común al endpoint interno FastAPI.
 
 ### P2: operación
 
@@ -188,6 +193,7 @@ Limitaciones:
 ## Validación final registrada
 
 - `docker compose --env-file .env.example config --quiet`: correcto.
+- `docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --quiet`: correcto.
 - `go test -count=1 ./...`: correcto.
 - `go build -a ./...`: correcto.
 - `python -m compileall src app scripts tests`: correcto.
@@ -198,4 +204,4 @@ Limitaciones:
 
 ## Conclusión
 
-La arquitectura interna está lista para continuar con un despliegue controlado interno. La promoción a Internet queda bloqueada hasta cerrar P0 y P1, especialmente red/TLS, gestión de tokens, escaneo reproducible y backups restaurables.
+La arquitectura interna está lista para continuar con un despliegue controlado interno. La promoción a Internet queda bloqueada hasta validar TLS en un dominio real y cerrar CSRF, secretos con rotación, escaneo reproducible y contratos Go-Python.

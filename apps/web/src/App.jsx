@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { login as loginRequest, refreshToken as refreshTokenRequest } from './api/auth';
+import { login as loginRequest, logout as logoutRequest, refreshToken as refreshTokenRequest } from './api/auth';
 import { askNormalQuery, askStreamQuery } from './api/chat';
 
 const DEFAULT_COLLECTION = 'manuales_tecnicos';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('manual-rag-token') || '');
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('manual-rag-refresh-token') || '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,14 +34,6 @@ function App() {
       localStorage.setItem('manual-rag-token', nextToken);
     } else {
       localStorage.removeItem('manual-rag-token');
-    }
-  };
-
-  const persistRefreshToken = (nextToken) => {
-    if (nextToken) {
-      localStorage.setItem('manual-rag-refresh-token', nextToken);
-    } else {
-      localStorage.removeItem('manual-rag-refresh-token');
     }
   };
 
@@ -86,11 +77,8 @@ function App() {
     try {
       const result = await loginRequest(username, password);
       const nextToken = result.access_token || result.token || '';
-      const nextRefreshToken = result.refresh_token || '';
       persistToken(nextToken);
-      persistRefreshToken(nextRefreshToken);
       setToken(nextToken);
-      setRefreshToken(nextRefreshToken);
       setIsAuthenticated(Boolean(nextToken));
     } catch (err) {
       setError(err.message || 'Credenciales inválidas');
@@ -99,11 +87,14 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutRequest();
+    } catch {
+      // The local client state must still be cleared after a network failure.
+    }
     persistToken('');
-    persistRefreshToken('');
     setToken('');
-    setRefreshToken('');
     setIsAuthenticated(false);
     setMessages([]);
     setContextItems([]);
@@ -113,27 +104,19 @@ function App() {
   };
 
   const handleRefreshToken = async () => {
-    if (!refreshToken) {
-      setError('No hay un token de renovación disponible. Inicia sesión de nuevo.');
-      return;
-    }
-
     setError('');
     setLoading(true);
 
     try {
-      const result = await refreshTokenRequest(refreshToken);
+      const result = await refreshTokenRequest();
       const nextToken = result.access_token || result.token || '';
-      const nextRefreshToken = result.refresh_token || refreshToken;
 
       if (!nextToken) {
         throw new Error('El servidor no devolvió un token de acceso.');
       }
 
       persistToken(nextToken);
-      persistRefreshToken(nextRefreshToken);
       setToken(nextToken);
-      setRefreshToken(nextRefreshToken);
     } catch (err) {
       setError(err.message || 'No se pudo renovar la sesión');
     } finally {
@@ -299,7 +282,7 @@ function App() {
             className="ghost"
             onClick={handleRefreshToken}
             type="button"
-            disabled={loading || !refreshToken}
+            disabled={loading}
           >
             Renovar sesión
           </button>

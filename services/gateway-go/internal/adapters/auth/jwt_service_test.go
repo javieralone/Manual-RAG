@@ -38,3 +38,34 @@ func TestJWTServiceRejectsShortSecrets(t *testing.T) {
 		t.Fatal("expected short secrets to be rejected")
 	}
 }
+
+func TestJWTServiceIssuesUniqueRefreshSessionIDs(t *testing.T) {
+	service, err := NewJWTService(
+		"access-secret-with-at-least-32-characters",
+		"refresh-secret-with-at-least-32-characters",
+		"manual-rag-api",
+		"manual-rag-client",
+		15*time.Minute,
+		24*time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("creating JWT service: %v", err)
+	}
+
+	first, err := service.IssueTokenPair(domain.User{Username: "admin"})
+	if err != nil {
+		t.Fatalf("issuing first pair: %v", err)
+	}
+	second, err := service.IssueTokenPair(domain.User{Username: "admin"})
+	if err != nil {
+		t.Fatalf("issuing second pair: %v", err)
+	}
+	if first.RefreshSessionID == "" || first.RefreshSessionID == second.RefreshSessionID {
+		t.Fatalf("expected distinct refresh session IDs, got %q and %q", first.RefreshSessionID, second.RefreshSessionID)
+	}
+
+	refresh, err := service.ParseRefreshToken(first.RefreshToken)
+	if err != nil || refresh.SessionID != first.RefreshSessionID {
+		t.Fatalf("expected refresh session ID %q, got %+v with error %v", first.RefreshSessionID, refresh, err)
+	}
+}

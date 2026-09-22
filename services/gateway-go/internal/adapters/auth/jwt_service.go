@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -52,7 +54,11 @@ func (s *JWTService) IssueTokenPair(user domain.User) (domain.TokenPair, error) 
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
-	refreshToken, err := s.issue(user, "refresh", s.refreshSecret, refreshExpiresAt, now)
+	refreshSessionID, err := newSessionID()
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	refreshToken, err := s.issue(user, "refresh", s.refreshSecret, refreshExpiresAt, now, refreshSessionID)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
@@ -63,10 +69,11 @@ func (s *JWTService) IssueTokenPair(user domain.User) (domain.TokenPair, error) 
 		TokenType:             "Bearer",
 		AccessTokenExpiresAt:  accessExpiresAt,
 		RefreshTokenExpiresAt: refreshExpiresAt,
+		RefreshSessionID:      refreshSessionID,
 	}, nil
 }
 
-func (s *JWTService) issue(user domain.User, tokenType string, secret []byte, expiresAt time.Time, now time.Time) (string, error) {
+func (s *JWTService) issue(user domain.User, tokenType string, secret []byte, expiresAt time.Time, now time.Time, sessionID ...string) (string, error) {
 	roles := make([]string, 0, len(user.Roles))
 	for _, role := range user.Roles {
 		roles = append(roles, string(role))
@@ -83,19 +90,26 @@ func (s *JWTService) issue(user domain.User, tokenType string, secret []byte, ex
 			NotBefore: jwt.NewNumericDate(now),
 		},
 	}
+	if len(sessionID) > 0 {
+		claims.ID = sessionID[0]
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(secret)
 }
 
-func (s *JWTService) ParseAccessToken(rawToken string) (domain.Identity, error) {
-	return s.parse(rawToken, "access", s.accessSecret)
+func (s *JWTService) ParseRefreshToken(rawToken string) (domain.RefreshToken, error) {
+	claims, err := s.parse(rawToken, "refresh", s.refreshSecret)
+	if err != nil || claims.RegisteredClaims.ID == "" || claims.ExpiresAt == nil {
+		return domain.RefreshToken{}, domain.ErrInvalidToken
+	}
+	return domain.RefreshToken{
+		Identity:  claims.identity(),
+		SessionID: claims.RegisteredClaims.ID,
+		ExpiresAt: claims.ExpiresAt.Time,
+	}, nil
 }
 
-func (s *JWTService) ParseRefreshToken(rawToken string) (domain.Identity, error) {
-	return s.parse(rawToken, "refresh", s.refreshSecret)
-}
-
-func (s *JWTService) parse(rawToken string, expectedType string, secret []byte) (domain.Identity, error) {
+func (s *JWTService) parse(rawToken string, expectedType string, secret []byte) (*jwtClaims, error) {
 	claims := &jwtClaims{}
 	token, err := jwt.ParseWithClaims(rawToken, claims, func(token *jwt.Token) (interface{}, error) {
 		if token.Method != jwt.SigningMethodHS256 {
@@ -104,12 +118,31 @@ func (s *JWTService) parse(rawToken string, expectedType string, secret []byte) 
 		return secret, nil
 	}, jwt.WithIssuer(s.issuer), jwt.WithAudience(s.audience), jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil || !token.Valid || claims.TokenType != expectedType || claims.Subject == "" {
-		return domain.Identity{}, domain.ErrInvalidToken
+		return nil, domain.ErrInvalidToken
 	}
+	return claims, nil
+}
 
+func (claims *jwtClaims) identity() domain.Identity {
 	roles := make([]domain.Role, 0, len(claims.Roles))
 	for _, role := range claims.Roles {
 		roles = append(roles, domain.Role(role))
 	}
-	return domain.Identity{Username: claims.Subject, Roles: roles}, nil
+	return domain.Identity{Username: claims.Subject, Roles: roles}
+}
+
+func (s *JWTService) ParseAccessToken(rawToken string) (domain.Identity, error) {
+	claims, err := s.parse(rawToken, "access", s.accessSecret)
+	if err != nil {
+		return domain.Identity{}, err
+	}
+	return claims.identity(), nil
+}
+
+func newSessionID() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }

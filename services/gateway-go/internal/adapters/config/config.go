@@ -18,6 +18,7 @@ type Config struct {
 	HTTPPort          string
 	HTTPClientTimeout time.Duration
 	RequestTimeout    time.Duration
+	MaxRequestBodyBytes int64
 	ReadinessInterval time.Duration
 	ShutdownTimeout   time.Duration
 	RetryAttempts     int
@@ -28,6 +29,7 @@ type Config struct {
 	RateLimitEnabled  bool
 	RateLimitRequests int
 	RateLimitWindow   time.Duration
+	SessionRedisURL   string
 	OTLPEndpoint      string
 	Auth              AuthConfig
 }
@@ -39,6 +41,7 @@ type AuthConfig struct {
 	Audience          string
 	AccessTTL         time.Duration
 	RefreshTTL        time.Duration
+	CookieSecure      bool
 	AdminUsername     string
 	AdminPasswordHash string
 	AdminRoles        []domain.Role
@@ -81,6 +84,10 @@ func Load() (Config, error) {
 	requestTimeout, err := durationEnv("REQUEST_TIMEOUT", 5*time.Minute)
 	if err != nil {
 		return Config{}, err
+	}
+	maxRequestBodyBytes, err := int64Env("MAX_REQUEST_BODY_BYTES", 1<<20)
+	if err != nil || maxRequestBodyBytes < 1 {
+		return Config{}, errors.New("MAX_REQUEST_BODY_BYTES debe ser un entero positivo")
 	}
 	readinessInterval, err := durationEnv("READINESS_INTERVAL", 15*time.Second)
 	if err != nil {
@@ -127,6 +134,7 @@ func Load() (Config, error) {
 		HTTPPort:          envOrDefault("HTTP_PORT", ":8080"),
 		HTTPClientTimeout: httpClientTimeout,
 		RequestTimeout:    requestTimeout,
+		MaxRequestBodyBytes: maxRequestBodyBytes,
 		ReadinessInterval: readinessInterval,
 		ShutdownTimeout:   shutdownTimeout,
 		RetryAttempts:     retryAttempts,
@@ -137,6 +145,7 @@ func Load() (Config, error) {
 		RateLimitEnabled:  boolEnv("RATE_LIMIT_ENABLED", true),
 		RateLimitRequests: rateLimitRequests,
 		RateLimitWindow:   rateLimitWindow,
+		SessionRedisURL:   envOrDefault("AUTH_SESSION_REDIS_URL", "redis://redis:6379/0"),
 		OTLPEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Auth: AuthConfig{
 			JWTSecret:         accessSecret,
@@ -145,6 +154,7 @@ func Load() (Config, error) {
 			Audience:          envOrDefault("AUTH_AUDIENCE", "manual-rag-client"),
 			AccessTTL:         accessTTL,
 			RefreshTTL:        refreshTTL,
+			CookieSecure:      boolEnv("AUTH_COOKIE_SECURE", true),
 			AdminUsername:     adminUsername,
 			AdminPasswordHash: adminPasswordHash,
 			AdminRoles:        roles,
@@ -185,6 +195,14 @@ func intEnv(name string, fallback int) (int, error) {
 		return fallback, nil
 	}
 	return strconv.Atoi(value)
+}
+
+func int64Env(name string, fallback int64) (int64, error) {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback, nil
+	}
+	return strconv.ParseInt(value, 10, 64)
 }
 
 func boolEnv(name string, fallback bool) bool {

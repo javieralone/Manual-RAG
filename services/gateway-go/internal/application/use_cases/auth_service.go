@@ -12,10 +12,11 @@ type AuthService struct {
 	users        ports.UserRepository
 	passwordHash ports.PasswordHasher
 	tokens       ports.TokenService
+	sessions     ports.RefreshSessionStore
 }
 
-func NewAuthService(users ports.UserRepository, passwordHash ports.PasswordHasher, tokens ports.TokenService) *AuthService {
-	return &AuthService{users: users, passwordHash: passwordHash, tokens: tokens}
+func NewAuthService(users ports.UserRepository, passwordHash ports.PasswordHasher, tokens ports.TokenService, sessions ports.RefreshSessionStore) *AuthService {
+	return &AuthService{users: users, passwordHash: passwordHash, tokens: tokens, sessions: sessions}
 }
 
 func (s *AuthService) Login(ctx context.Context, username string, password string) (domain.TokenPair, error) {
@@ -29,7 +30,14 @@ func (s *AuthService) Login(ctx context.Context, username string, password strin
 		return domain.TokenPair{}, domain.ErrInvalidCredentials
 	}
 
-	return s.tokens.IssueTokenPair(user)
+	pair, err := s.tokens.IssueTokenPair(user)
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	if err := s.sessions.Create(ctx, refreshSession(pair, user.Username)); err != nil {
+		return domain.TokenPair{}, domain.ErrSessionUnavailable
+	}
+	return pair, nil
 }
 
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (domain.TokenPair, error) {
@@ -38,15 +46,41 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (domain.
 		return domain.TokenPair{}, domain.ErrInvalidToken
 	}
 
-	identity, err := s.tokens.ParseRefreshToken(refreshToken)
+	current, err := s.tokens.ParseRefreshToken(refreshToken)
 	if err != nil {
 		return domain.TokenPair{}, domain.ErrInvalidToken
 	}
 
-	user, err := s.users.FindByUsername(ctx, identity.Username)
+	user, err := s.users.FindByUsername(ctx, current.Identity.Username)
 	if err != nil {
 		return domain.TokenPair{}, domain.ErrInvalidToken
 	}
 
-	return s.tokens.IssueTokenPair(user)
+	pair, err := s.tokens.IssueTokenPair(user)
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	rotated, err := s.sessions.Rotate(ctx, domain.RefreshSession{ID: current.SessionID, Username: current.Identity.Username, ExpiresAt: current.ExpiresAt}, refreshSession(pair, user.Username))
+	if err != nil {
+		return domain.TokenPair{}, domain.ErrSessionUnavailable
+	}
+	if !rotated {
+		return domain.TokenPair{}, domain.ErrInvalidToken
+	}
+	return pair, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	current, err := s.tokens.ParseRefreshToken(strings.TrimSpace(refreshToken))
+	if err != nil {
+		return domain.ErrInvalidToken
+	}
+	if err := s.sessions.Revoke(ctx, current.SessionID); err != nil {
+		return domain.ErrSessionUnavailable
+	}
+	return nil
+}
+
+func refreshSession(pair domain.TokenPair, username string) domain.RefreshSession {
+	return domain.RefreshSession{ID: pair.RefreshSessionID, Username: username, ExpiresAt: pair.RefreshTokenExpiresAt}
 }

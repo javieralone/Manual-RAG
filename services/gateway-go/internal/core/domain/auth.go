@@ -17,6 +17,7 @@ var (
 	ErrInvalidCredentials = errors.New("credenciales inválidas")
 	ErrInvalidToken       = errors.New("token inválido")
 	ErrInsufficientRole   = errors.New("permisos insuficientes")
+	ErrSessionUnavailable = errors.New("sesión no disponible")
 )
 
 type User struct {
@@ -32,8 +33,21 @@ type Identity struct {
 
 type TokenPair struct {
 	AccessToken           string    `json:"access_token"`
-	RefreshToken          string    `json:"refresh_token"`
+	RefreshToken          string    `json:"-"`
 	TokenType             string    `json:"token_type"`
 	AccessTokenExpiresAt  time.Time `json:"access_token_expires_at"`
 	RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at"`
+	RefreshSessionID      string    `json:"-"`
+}
+
+type RefreshToken struct {
+	Identity  Identity
+	SessionID string
+	ExpiresAt time.Time
+}
+
+type RefreshSession struct {
+	ID        string
+	Username  string
+	ExpiresAt time.Time
 }

@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
+	"api-go/internal/adapters/http/response"
 	"api-go/internal/adapters/observability"
 )
 
@@ -23,17 +23,17 @@ func NewHealthHandler(metrics *observability.Metrics, checks ...DependencyChecke
 }
 
 func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
+	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 }
 
 func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	if !h.UpdateReadiness(ctx) {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "NOT_READY"})
+		response.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "NOT_READY"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "READY"})
+	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "READY"})
 }
 
 func (h *HealthHandler) UpdateReadiness(ctx context.Context) bool {
@@ -73,8 +73,3 @@ func (h *HealthHandler) StartReadinessMonitor(ctx context.Context, interval time
 	}()
 }
 
-func writeJSON(w http.ResponseWriter, status int, value interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
