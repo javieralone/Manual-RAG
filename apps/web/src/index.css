@@ -83,7 +83,7 @@ button.ghost {
 }
 
 .auth-shell {
-  background: rgba(7, 19, 31, 0.7);
+  background: var(--panel-strong);
 }
 
 .auth-card,
