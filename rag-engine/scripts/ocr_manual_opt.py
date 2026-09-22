@@ -13,8 +13,9 @@ import pytesseract
 
 Image.MAX_IMAGE_PIXELS = None
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-RAG_ENGINE_DIR = BASE_DIR / "rag-engine"
+SERVICE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = SERVICE_DIR.parent.parent
+RAG_ENGINE_DIR = SERVICE_DIR
 
 sys.path.insert(0, str(RAG_ENGINE_DIR))
 
@@ -82,8 +83,8 @@ def process_single_page_ocr(args_tuple: tuple) -> Dict[str, Any]:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extrae texto OCR de un manual PDF.")
-    parser.add_argument("--pdf", type=Path, default=BASE_DIR / "documents" / "0-lubricacion-mantenimiento.pdf")
-    parser.add_argument("--output", type=Path, default=BASE_DIR / "output" / "manual_pages.json")
+    parser.add_argument("--pdf", type=Path, default=BASE_DIR / "data" / "documents" / "0-lubricacion-mantenimiento.pdf")
+    parser.add_argument("--output", type=Path, default=BASE_DIR / "data" / "artifacts" / "manual_pages.json")
     parser.add_argument("--document-id", default=None)
     parser.add_argument("--part", type=int, default=1)
     parser.add_argument("--collection", default="generic_manuals")

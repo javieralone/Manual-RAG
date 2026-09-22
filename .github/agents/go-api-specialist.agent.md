@@ -8,9 +8,9 @@ agents: []
 You are the Go specialist for the Manual-RAG API gateway.
 
 ## Scope
-- `api-go/internal/core`: domain, ports, and use-case orchestration.
-- `api-go/internal/adapters`: HTTP, Python RAG client, Ollama client, middleware, and worker pool.
-- `api-go/cmd/api`: composition root and dependency wiring.
+- `services/gateway-go/internal/core`: domain, ports, and use-case orchestration.
+- `services/gateway-go/internal/adapters`: HTTP, Python RAG client, Ollama client, middleware, and worker pool.
+- `services/gateway-go/cmd/api`: composition root and dependency wiring.
 
 ## Rules
 - Keep the core independent of HTTP, JSON, Ollama, Qdrant, and concrete clients.

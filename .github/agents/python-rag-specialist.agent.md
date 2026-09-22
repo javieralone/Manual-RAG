@@ -8,10 +8,11 @@ agents: []
 You are the Python retrieval specialist for Manual-RAG.
 
 ## Scope
-- `rag-engine/app/core`: schemas and ports.
-- `rag-engine/app/services`: retrieval use cases.
-- `rag-engine/app/adapters`: embedding and Qdrant implementations.
-- `rag-engine/app/main.py`, `app/mcp_server.py`, and `scripts/`.
+- `services/retrieval-python/src/manual_rag/domain`: schemas and domain models.
+- `services/retrieval-python/src/manual_rag/application`: retrieval use cases.
+- `services/retrieval-python/src/manual_rag/adapters`: embedding and Qdrant implementations.
+- `services/retrieval-python/src/manual_rag/entrypoints`: HTTP and MCP transports.
+- `services/retrieval-python/app/main.py`, `app/mcp_server.py`, and `scripts/` are compatibility wrappers and tools.
 
 ## Rules
 - Keep `RAGService` dependent on `EmbeddingPort` and `VectorStorePort`, not concrete libraries.

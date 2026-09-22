@@ -14,9 +14,10 @@ from app.core.domain.evaluation import EvalCase, EvalThresholds
 from app.services.evaluation_service import EvaluationService
 from app.services.rag_service import RAGService
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-EVAL_DIR = BASE_DIR / "eval"
-OUTPUT_DIR = BASE_DIR / "output"
+SERVICE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = SERVICE_DIR.parent.parent
+EVAL_DIR = SERVICE_DIR / "eval"
+OUTPUT_DIR = BASE_DIR / "data" / "artifacts" / "evaluations"
 
 
 def load_cases(path: Path):

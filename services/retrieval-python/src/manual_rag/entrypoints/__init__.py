@@ -1,0 +1,1 @@
+"""Transport entrypoints for the retrieval service."""

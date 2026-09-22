@@ -1,0 +1,91 @@
+services:
+  qdrant:
+    ports: !reset []
+    networks: [backend]
+
+  rag-engine:
+    ports: !reset []
+    networks: [backend]
+
+  mcp-server:
+    ports: !reset []
+    networks: [backend]
+
+  redis:
+    networks: [backend]
+
+  api-go:
+    ports: !reset []
+    networks: [backend]
+
+  frontend:
+    ports: !reset []
+    build:
+      args:
+        VITE_API_BASE_URL: ""
+    networks: [backend]
+
+  prometheus:
+    ports: !reset []
+    networks: [backend, admin]
+
+  grafana:
+    ports: !reset []
+    networks: [admin]
+
+  loki:
+    ports: !reset []
+    networks: [admin]
+
+  promtail:
+    networks: [admin]
+
+  tempo:
+    ports: !reset []
+    networks: [backend, admin]
+
+  proxy:
+    build:
+      context: ./deploy/proxy
+    container_name: rag_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    depends_on:
+      - frontend
+      - api-go
+    networks: [edge, backend]
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:v3.1.0
+    container_name: rag_certbot
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        while true; do certbot certonly --webroot --webroot-path /var/www/certbot
+        --cert-name manual-rag --keep-until-expiring --non-interactive --agree-tos
+        --no-eff-email --email ${CERTBOT_EMAIL:?CERTBOT_EMAIL must be set} -d ${DOMAIN:?DOMAIN must be set};
+        sleep 12h; done
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    depends_on:
+      - proxy
+    networks: [edge]
+    restart: unless-stopped
+
+volumes:
+  certbot_conf:
+  certbot_webroot:
+
+networks:
+  edge:
+  backend:
+    internal: true
+  admin:
+    internal: true
