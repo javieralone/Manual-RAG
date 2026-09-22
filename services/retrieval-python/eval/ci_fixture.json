@@ -1,0 +1,29 @@
+{
+  "¿Dónde está ubicado el número de motor en el vehículo?": [
+    {
+      "page": 12,
+      "source": "0-lubricacion-mantenimiento.pdf",
+      "text": "El número de motor está ubicado en el bloque de cilindros.",
+      "score": 1.0,
+      "metadata": {"collection": "manuales_tecnicos"}
+    }
+  ],
+  "¿Cuántos cilindros tiene el motor y cómo están dispuestos?": [
+    {
+      "page": 18,
+      "source": "0-lubricacion-mantenimiento.pdf",
+      "text": "El motor tiene seis cilindros en línea y una cilindrada especificada en el manual.",
+      "score": 1.0,
+      "metadata": {"collection": "manuales_tecnicos"}
+    }
+  ],
+  "¿A qué automóviles se refiere este manual de reparaciones?": [
+    {
+      "page": 2,
+      "source": "0-lubricacion-mantenimiento.pdf",
+      "text": "Este manual de Reparación se refiere a automóviles VALIANT.",
+      "score": 1.0,
+      "metadata": {"collection": "manuales_tecnicos"}
+    }
+  ]
+}
