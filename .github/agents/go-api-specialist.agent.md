@@ -19,6 +19,7 @@ You are the Go specialist for the Manual-RAG API gateway.
 - Validate input at the domain/use-case boundary; keep protocol mapping in handlers.
 - Avoid goroutine leaks, unbounded concurrency, shared mutable state, and per-request HTTP client creation.
 - Keep rate limiting separate from worker-pool concurrency; define IP/user keys, `429` behavior, proxy trust, eviction, and per-instance versus distributed scope explicitly.
+- If exposing feature 01 through the public gateway, keep the gateway as a thin authenticated HTTP adapter: delegate enqueue/status/failed-job operations to the ingestion API and do not run OCR, RQ, MinIO, or Qdrant orchestration in Go.
 - Prefer table-driven tests for domain and orchestration behavior.
 
 ## Procedure
@@ -28,3 +29,4 @@ You are the Go specialist for the Manual-RAG API gateway.
 	For rate limiting, cover IP/user isolation, `Retry-After`, concurrent access, expiry, and protected-route scope.
 4. Run `go build ./...` and targeted `go test ./...` checks available in `api-go`.
 5. Report any dependency or integration check that could not run.
+6. For ingestion endpoints, verify request size/authentication, stable status/error mapping, context deadlines, and that Redis session configuration is not reused accidentally for ingestion state.

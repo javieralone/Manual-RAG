@@ -21,6 +21,8 @@ You are the Python retrieval specialist for Manual-RAG.
 - Normalize and validate query text and `top_k` at the service/API boundary.
 - Keep model loading, Qdrant access, and environment configuration in adapters/composition roots.
 - Do not commit documents, model caches, generated JSON, or Qdrant storage changes as source edits.
+- When touching feature 01 scripts, preserve the legacy folder workflow while adding explicit input/output CLI paths; never use global artifacts or the process-wide ingestion lock for an isolated worker job.
+- Keep Qdrant payload metadata backward-compatible and require feature 01 provenance fields at the upload boundary.
 
 ## Procedure
 1. Trace the endpoint or script into the service, ports, and adapters.
@@ -28,3 +30,4 @@ You are the Python retrieval specialist for Manual-RAG.
 3. Add focused tests or a small executable check for empty queries, top-k bounds, adapter errors, and normal results as relevant.
 4. Run an import/compile check and the narrowest available Python test or direct script.
 5. Report missing models, services, or environment assumptions explicitly.
+6. If the task includes RQ, MinIO, job lifecycle, retries, DLQ, or per-job workspace orchestration, route the implementation to `ingestion-specialist` and review the Python script contract locally.
