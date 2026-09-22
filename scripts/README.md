@@ -14,7 +14,7 @@ Este directorio centraliza las herramientas que permiten a la IA trabajar con fl
 
 - Nombres de rama: `feature/<numero>-<descripcion-corta>`
 - Ejemplo: `feature/04-mejora-ocr`
-- Cada feature pendiente debe venir de un objetivo documentado en [features/README.md](../features/README.md)
+- Cada feature pendiente debe venir de un objetivo documentado en [docs/roadmap/README.md](../docs/roadmap/README.md)
 
 ## Flujo de ejecución
 

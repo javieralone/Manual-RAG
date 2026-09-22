@@ -1,7 +1,7 @@
-/qdrant_storage
-/output
+/data/local/qdrant
+/data/artifacts
 /venv
-/documents
+/data/documents
 .env
 .env.*
 !.env.example
@@ -9,12 +9,12 @@ __pycache__/
 *.pyc
 
 # Frontend / Vite
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.vite/
+apps/web/.env
+apps/web/.env.*
+!apps/web/.env.example
 
 # Node
 npm-debug.log*

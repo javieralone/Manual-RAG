@@ -10,7 +10,7 @@ You are the observability specialist for the Manual-RAG repository.
 ## Scope
 - `api-go` metrics, structured logs, OpenTelemetry providers, HTTP instrumentation, readiness metrics, and dependency spans.
 - `rag-engine` metrics, JSON logging, FastAPI instrumentation, embedding/Qdrant spans, and readiness.
-- `observability/`: Prometheus rules, Grafana dashboards and datasources, Loki, Promtail, Tempo, and Docker Compose wiring.
+- `deploy/observability/`: Prometheus rules, Grafana dashboards and datasources, Loki, Promtail, and Tempo configuration.
 
 ## Routing rules
 - Use this agent for requests containing metrics, Prometheus, Grafana, dashboard, logs, Loki, Promtail, Alloy, traces, Tempo, OpenTelemetry, OTLP, trace ID, traceparent, readiness, healthchecks, alerts, LogQL, TraceQL, p95, p99, latency, scraping, or observability.

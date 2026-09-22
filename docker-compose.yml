@@ -7,7 +7,7 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - ./qdrant_storage:/qdrant/storage
+      - ./data/local/qdrant:/qdrant/storage
     deploy:
       resources:
         limits:
@@ -22,7 +22,7 @@ services:
   # 2. Microservicio Motor RAG (Python)
   rag-engine:
     build:
-      context: ./rag-engine
+      context: ./services/retrieval-python
       dockerfile: Dockerfile
     container_name: rag_engine
     ports:
@@ -37,8 +37,8 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     volumes:
       - huggingface_cache:/app/.cache/huggingface  # Guarda el modelo en el volumen
-      - ./documents:/app/documents
-      - ./output:/app/output
+      - ./data/documents:/app/documents
+      - ./data/artifacts:/app/output
     deploy:
       resources:
         limits:
@@ -56,7 +56,7 @@ services:
   # 2b. Servidor MCP para GitHub Copilot / clientes MCP
   mcp-server:
     build:
-      context: ./rag-engine
+      context: ./services/retrieval-python
       dockerfile: Dockerfile
     container_name: rag_mcp_server
     command: ["python", "-m", "app.mcp_server"]
@@ -75,8 +75,8 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     volumes:
       - huggingface_cache:/app/.cache/huggingface
-      - ./documents:/app/documents
-      - ./output:/app/output
+      - ./data/documents:/app/documents
+      - ./data/artifacts:/app/output
     deploy:
       resources:
         limits:
@@ -89,7 +89,7 @@ services:
   # 3. API Gateway en Go
   api-go:
     build:
-      context: ./api-go
+      context: ./services/gateway-go
       dockerfile: Dockerfile
     container_name: rag_go_api
     ports:
@@ -129,7 +129,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile
     container_name: rag_frontend
     ports:
@@ -146,8 +146,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -167,8 +167,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
       - loki
@@ -181,7 +181,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - ./deploy/observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
@@ -190,7 +190,7 @@ services:
     image: grafana/promtail:3.2.1
     container_name: rag_promtail
     volumes:
-      - ./observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - ./deploy/observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - promtail_positions:/tmp
@@ -207,7 +207,7 @@ services:
       - "4317:4317"
       - "4318:4318"
     volumes:
-      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - ./deploy/observability/tempo/tempo.yml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
     command: ["-config.file=/etc/tempo.yaml"]
     restart: unless-stopped

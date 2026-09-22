@@ -11,7 +11,7 @@ argument-hint: 'Describe the Go gateway behavior or failing check.'
 3. Keep domain and ports free of infrastructure imports.
 4. Preserve context propagation through clients and middleware.
 5. Add focused tests around the changed use case or contract.
-6. Run `go build ./...` and the narrowest relevant `go test` command from `api-go`.
+6. Run `go build ./...` and the narrowest relevant `go test` command from `services/gateway-go`.
 
 ## Contract checklist
 - Empty or invalid questions are rejected by the use-case boundary.

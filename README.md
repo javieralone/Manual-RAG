@@ -93,7 +93,7 @@ Además, el proyecto incluye:
 Manual-RAG/
 ├── .vscode/                         # Configuración del cliente MCP
 │   └── mcp.json
-├── api-go/                          # Gateway HTTP y orquestación de consultas
+├── services/gateway-go/             # Gateway HTTP y orquestación de consultas
 │   ├── cmd/
 │   │   └── api/
 │   │       └── main.go
@@ -101,7 +101,8 @@ Manual-RAG/
 │   │   ├── core/
 │   │   │   ├── domain/
 │   │   │   ├── ports/
-│   │   │   └── services/
+│   │   ├── application/
+│   │   │   └── use_cases/
 │   │   ├── adapters/
 │   │   │   ├── auth/
 │   │   │   ├── clients/
@@ -113,14 +114,20 @@ Manual-RAG/
 │   ├── go.mod
 │   └── README.md
 │
-├── rag-engine/                      # Servicio de recuperación y embeddings
+├── services/retrieval-python/       # Servicio de recuperación y embeddings
 │   ├── app/
+│   │   ├── main.py                    # Wrapper compatible FastAPI
+│   │   └── mcp_server.py              # Wrapper compatible MCP
+│   ├── src/manual_rag/
 │   │   ├── adapters/
-│   │   ├── core/
-│   │   ├── main.py
-│   │   ├── mcp_server.py
-│   │   ├── observability.py
-│   │   └── __init__.py
+│   │   ├── application/
+│   │   ├── domain/
+│   │   ├── ports/
+│   │   ├── entrypoints/
+│   │   │   ├── http.py
+│   │   │   └── mcp.py
+│   │   ├── bootstrap.py
+│   │   └── observability.py
 │   ├── scripts/
 │   │   ├── index_manual.py
 │   │   ├── ocr_manual.py
@@ -133,7 +140,7 @@ Manual-RAG/
 │   ├── Dockerfile
 │   └── README.md
 │
-├── frontend/                        # UI React + Vite para login y chat
+├── apps/web/                        # UI React + Vite para login y chat
 │   ├── src/
 │   ├── Dockerfile
 │   ├── package.json
@@ -141,16 +148,17 @@ Manual-RAG/
 │   ├── .env.example
 │   └── README.md
 │
-├── observability/                   # Métricas, trazas y logs
+├── deploy/observability/            # Métricas, trazas y logs
 │   ├── grafana/
 │   ├── loki/
 │   ├── prometheus/
 │   ├── promtail/
 │   └── tempo/
 │
-├── documents/                      # Manuales originales cargados al sistema
-├── output/                         # Artefactos generados durante procesamiento
-├── qdrant_storage/                 # Persistencia del índice vectorial
+├── data/
+│   ├── documents/                  # Manuales originales cargados al sistema
+│   ├── artifacts/                 # Artefactos generados durante procesamiento
+│   └── local/qdrant/               # Persistencia del índice vectorial
 ├── .env.example                    # Plantilla de configuración
 ├── .env.local                      # Configuración local con secretos (ignorada)
 ├── .gitignore
@@ -326,7 +334,7 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 ### `POST /api/v1/query/stream`
 
-Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`api-go/README.md`](api-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
+Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`services/gateway-go/README.md`](services/gateway-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
 
 ```bash
 curl -N --no-buffer -X POST http://localhost:8080/api/v1/query/stream \
@@ -370,7 +378,7 @@ Este modelo transforma el texto en vectores numéricos que permiten realizar bú
 La implementación se encuentra en:
 
 ```text
-rag-engine/app/adapters/bge_embedding_adapter.py
+services/retrieval-python/src/manual_rag/adapters/bge_embedding_adapter.py
 ```
 
 El modelo se carga una sola vez cuando se inicia el servicio para evitar volver a descargarlo o inicializarlo en cada consulta.
@@ -402,13 +410,13 @@ Almacenamiento en Qdrant
 Los scripts relacionados con este proceso se encuentran en:
 
 ```text
-rag-engine/scripts/
+services/retrieval-python/scripts/
 ```
 
 La ingesta usa estas carpetas:
 
 ```text
-documents/
+data/documents/
 ├── new/        # PDFs pendientes
 ├── reading/    # PDF en procesamiento
 └── completed/  # PDFs procesados correctamente
@@ -417,27 +425,27 @@ documents/
 Para manuales divididos en varias partes, usa el mismo identificador y numera cada PDF:
 
 ```text
-documents/new/manual-reparaciones-valiant__parte-001.pdf
-documents/new/manual-reparaciones-valiant__parte-002.pdf
+data/documents/new/manual-reparaciones-valiant__parte-001.pdf
+data/documents/new/manual-reparaciones-valiant__parte-002.pdf
 ```
 
 Ejecuta el orquestador oficial desde la raíz del proyecto:
 
 ```powershell
-python rag-engine/scripts/process_manual_opt.py `
+python services/retrieval-python/scripts/process_manual_opt.py `
   --fast-ocr `
   --workers 2 `
   --memory-mode disk
 ```
 
-`process_manual_opt.py` toma un PDF cada vez de `documents/new/<nombre_coleccion>`, lo mueve a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si todas las etapas terminan correctamente. Si falla o se interrumpe, vuelve a `new` y registra el error en `logs/ingestion.log`.
+`process_manual_opt.py` toma un PDF cada vez de `data/documents/new/<nombre_coleccion>`, lo mueve a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si todas las etapas terminan correctamente. Si falla o se interrumpe, vuelve a `new` y registra el error en `logs/ingestion.log`.
 
-La ingesta sigue el patrón de carpetas `documents/new/<nombre_coleccion>/`, `documents/reading/<nombre_coleccion>/` y `documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
+La ingesta sigue el patrón de carpetas `data/documents/new/<nombre_coleccion>/`, `data/documents/reading/<nombre_coleccion>/` y `data/documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
 
 Ejemplo de estructura:
 
 ```text
-documents/
+data/documents/
 ├── new/
 │   ├── manuales_tecnicos/
 │   │   ├── <nombre-manual>__parte-001.pdf
@@ -455,7 +463,7 @@ documents/
 El orquestador oficial es `process_manual_opt.py` y conserva los parámetros de OCR y rendimiento:
 
 ```powershell
-python rag-engine/scripts/process_manual_opt.py `
+python services/retrieval-python/scripts/process_manual_opt.py `
   --fast-ocr `
   --workers 2 `
   --memory-mode disk
@@ -464,17 +472,17 @@ python rag-engine/scripts/process_manual_opt.py `
 También puedes procesar un PDF concreto o forzar una colección:
 
 ```powershell
-python rag-engine/scripts/process_manual_opt.py --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf --collection manuales_tecnicos
+python services/retrieval-python/scripts/process_manual_opt.py --pdf data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf --collection manuales_tecnicos
 ```
 
-Si la colección no se indica, se usa la inferida desde la carpeta `documents/new/<nombre_coleccion>/`. Cuando no hay carpeta compatible, el valor por defecto es `generic_manuals`.
+Si la colección no se indica, se usa la inferida desde la carpeta `data/documents/new/<nombre_coleccion>/`. Cuando no hay carpeta compatible, el valor por defecto es `generic_manuals`.
 
 El OCR admite configuración adicional de salida, resolución y lenguaje:
 
 ```bash
-python rag-engine/scripts/ocr_manual_opt.py \
-  --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
-  --output output/manual_pages.json \
+python services/retrieval-python/scripts/ocr_manual_opt.py \
+  --pdf data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
+  --output data/artifacts/manual_pages.json \
   --collection manuales_tecnicos \
   --dpi 200 \
   --language spa
@@ -511,7 +519,7 @@ Cuando llega una pregunta al sistema:
 El proyecto incluye un servidor MCP en:
 
 ```text
-rag-engine/app/mcp_server.py
+services/retrieval-python/src/manual_rag/entrypoints/mcp.py
 ```
 
 La configuración para clientes compatibles se encuentra en:
@@ -559,7 +567,7 @@ Usa search_technical_manuals para buscar el procedimiento de mantenimiento del s
 Crea y activa un entorno virtual:
 
 ```bash
-cd rag-engine
+cd services/retrieval-python
 
 python -m venv .venv
 ```
@@ -585,19 +593,19 @@ pip install -r requirements.txt
 Inicia el servicio FastAPI:
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=src uvicorn manual_rag.entrypoints.http:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 El servidor MCP se inicia por separado en el puerto `8001`:
 
 ```bash
-python -m app.mcp_server
+PYTHONPATH=src python -m manual_rag.entrypoints.mcp
 ```
 
 ### Ejecutar el API Gateway en Go
 
 ```bash
-cd api-go
+cd services/gateway-go
 go mod tidy
 go build -v ./...
 go run ./cmd/api
@@ -730,12 +738,12 @@ ollama list
 Los siguientes directorios pueden contener datos generados por el sistema:
 
 ```text
-documents/
-output/
-qdrant_storage/
+data/documents/
+data/artifacts/
+data/local/qdrant/
 ```
 
-El directorio `qdrant_storage/` se monta directamente desde el host, por lo que conserva los vectores al reiniciar los contenedores. `docker compose down -v` elimina los volúmenes nombrados, pero no borra ese directorio; elimínalo manualmente solo si quieres reconstruir el índice.
+El directorio `data/local/qdrant/` se monta directamente desde el host, por lo que conserva los vectores al reiniciar los contenedores. `docker compose down -v` elimina los volúmenes nombrados, pero no borra ese directorio; elimínalo manualmente solo si quieres reconstruir el índice.
 
 ---
 
@@ -765,11 +773,11 @@ El directorio `qdrant_storage/` se monta directamente desde el host, por lo que 
 
 ### Pendientes
 
-- Añadir un [panel administrativo operativo](features/07-ui-consulta-admin.md) para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
-- Añadir una [cola de trabajos](features/06-cola-indexacion.md) para indexación asíncrona y procesamiento por lotes.
-- Extender las [pruebas de integración](features/08-tests-integracion.md) con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
-- Mejorar los [dashboards operativos](features/10-dashboards-operativos.md) con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
-- Explorar estrategias de [caché y reindexación incremental](features/11-cache-reindexacion.md) para reducir tiempos de respuesta y carga.
+- Añadir un [panel administrativo operativo](docs/roadmap/07-ui-consulta-admin.md) para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
+- Añadir una [cola de trabajos](docs/roadmap/06-cola-indexacion.md) para indexación asíncrona y procesamiento por lotes.
+- Extender las [pruebas de integración](docs/roadmap/08-tests-integracion.md) con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
+- Mejorar los [dashboards operativos](docs/roadmap/10-dashboards-operativos.md) con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
+- Explorar estrategias de [caché y reindexación incremental](docs/roadmap/11-cache-reindexacion.md) para reducir tiempos de respuesta y carga.
 
 ---
 
@@ -783,8 +791,8 @@ El sistema incluye observabilidad end-to-end:
 - Promtail recoge los logs Docker y los envía a Loki con labels estables (`service`, `container`, `project`, `environment`, `level`).
 - Trazas OpenTelemetry OTLP con destino Tempo y propagación W3C entre gateway, RAG engine y Ollama.
 - Stack Docker Compose con Prometheus, Grafana, Loki y Tempo.
-- Dashboard provisionado en `observability/grafana/dashboards/`.
-- Alertas base en `observability/prometheus/alerts.yml` para disponibilidad, latencia, errores, Ollama y Qdrant.
+- Dashboard provisionado en `deploy/observability/grafana/dashboards/`.
+- Alertas base en `deploy/observability/prometheus/alerts.yml` para disponibilidad, latencia, errores, Ollama y Qdrant.
 
 URLs locales:
 
