@@ -19,8 +19,12 @@ def resolve_feature(roadmap_dir: Path, requested: str) -> Path:
 
 
 def build_plan(feature_path: Path) -> str:
-    lines = feature_path.read_text(encoding="utf-8").splitlines()
-    title = next((line[2:].strip() for line in lines if line.startswith("# ")), feature_path.stem)
+    return build_plan_text(feature_path.read_text(encoding="utf-8"), feature_path.as_posix())
+
+
+def build_plan_text(text: str, source: str) -> str:
+    lines = text.splitlines()
+    title = next((line[2:].strip() for line in lines if line.startswith("# ")), Path(source).stem)
     sections = []
     current = None
     for line in lines:
@@ -33,7 +37,7 @@ def build_plan(feature_path: Path) -> str:
     output = [
         f"# Implementation Plan: {title}",
         "",
-        f"Source: `{feature_path.as_posix()}`",
+        f"Source: `{source}`",
         "",
         "## Scope extracted from the feature",
     ]
@@ -58,11 +62,20 @@ def build_plan(feature_path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("feature")
+    parser.add_argument("feature", nargs="?")
+    parser.add_argument("--source", default="")
     parser.add_argument("--roadmap", default="docs/roadmap")
     parser.add_argument("--output", default="implementation-plan.md")
     args = parser.parse_args()
 
+    if args.source:
+        source_path = Path(args.source)
+        Path(args.output).write_text(build_plan_text(source_path.read_text(encoding="utf-8"), source_path.as_posix()), encoding="utf-8")
+        print(f"Source: {source_path}")
+        print(f"Plan: {args.output}")
+        return
+    if not args.feature:
+        parser.error("indica una feature o --source")
     feature_path = resolve_feature(Path(args.roadmap), args.feature)
     Path(args.output).write_text(build_plan(feature_path), encoding="utf-8")
     print(f"Feature: {feature_path}")

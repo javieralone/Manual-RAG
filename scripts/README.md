@@ -34,31 +34,30 @@ Esto hace lo siguiente:
 
 ## Generar un plan desde GitHub Actions
 
-Con GitHub CLI autenticado, desde PowerShell:
+Primero crea manualmente un Issue en GitHub con el texto completo de la feature. Luego, con GitHub CLI autenticado, desde PowerShell:
 
 ```powershell
-.\scripts\run-feature.ps1 -Feature 06 -Mode plan
+.\scripts\start-feature.ps1 -Issue 123 -Wait
+```
+
+El comando:
+
+1. envía el número del Issue a GitHub Actions,
+2. descarga su título y cuerpo,
+3. genera `implementation-plan.md`,
+4. publica el plan como comentario en el mismo Issue,
+5. agrega la etiqueta `copilot-implementation`.
+
+Para consultar el artifact:
+
+```powershell
 gh run list --workflow feature-plan.yml --limit 1
-gh run download <run-id> -n feature-06-plan
+gh run download <run-id> -n feature-123-plan
 ```
 
-El workflow lee `docs/roadmap`, genera `implementation-plan.md` y lo publica como artifact.
+Para que Copilot implemente el Issue, después de que aparezca el comentario del plan, abre el Issue en GitHub y selecciona **Start task** o la acción equivalente de Copilot Cloud Agent. También puedes configurar una Automation compatible con tu cuenta para Issues que tengan esta etiqueta:
 
-Para iniciar la implementación:
-
-```powershell
-.\scripts\start-feature.ps1 -Feature 06
-```
-
-El script anterior ejecuta el workflow en modo `implement`: primero genera el plan y luego crea la Issue que dispara la Automation de Copilot. Para esperar el resultado del workflow:
-
-```powershell
-.\scripts\start-feature.ps1 -Feature 06 -Wait
-```
-
-En este modo, GitHub Actions crea una Issue con la feature y el plan, etiquetada como `copilot-implementation`. Debes configurar una Automation de Copilot Cloud Agent en GitHub con:
-
-- trigger: issue creada,
+- trigger: el evento de Issue soportado por tu configuración,
 - filtro: `label:copilot-implementation`,
 - herramientas: modificar archivos, ejecutar tests, crear branch y Pull Request,
 - instrucción: implementar la Issue, ejecutar validaciones y abrir el PR contra `dev`.

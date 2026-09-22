@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       feature:
-        description: "Número o slug de la feature, por ejemplo 06 o 06-cola-indexacion"
-        required: true
+        description: "Número o slug de la feature del roadmap"
+        required: false
+        type: string
+      issue:
+        description: "Número del Issue existente que contiene la feature"
+        required: false
         type: string
       mode:
         description: "Operación solicitada"
@@ -33,35 +37,43 @@ jobs:
           python-version: "3.11"
 
       - name: Generate implementation plan
-        run: >-
-          python scripts/resolve-feature.py
-          "${{ inputs.feature }}"
-          --output implementation-plan.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEATURE: ${{ inputs.feature }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          if [ -n "$ISSUE" ]; then
+            gh issue view "$ISSUE" --json title,body --template '{{.title}}\n\n{{.body}}' > feature-from-issue.md
+            python scripts/resolve-feature.py --source feature-from-issue.md --output implementation-plan.md
+          elif [ -n "$FEATURE" ]; then
+            python scripts/resolve-feature.py "$FEATURE" --output implementation-plan.md
+          else
+            echo "Debes indicar feature o issue." >&2
+            exit 1
+          fi
 
       - name: Upload implementation plan
         uses: actions/upload-artifact@v4
         with:
-          name: feature-${{ inputs.feature }}-plan
+          name: feature-${{ inputs.issue || inputs.feature }}-plan
           path: implementation-plan.md
 
-      - name: Create Copilot implementation issue
-        if: inputs.mode == 'implement'
+      - name: Publish plan on existing Issue
+        if: inputs.issue != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          FEATURE: ${{ inputs.feature }}
+          ISSUE: ${{ inputs.issue }}
         run: |
           gh label create copilot-implementation --color 1f6feb --description "Issue preparada para Copilot Cloud Agent" --force
           {
-            echo "## Objetivo"
-            echo "Implementar la feature **${FEATURE}** en una rama de trabajo y abrir un Pull Request contra dev."
+            echo "## Plan generado por CI"
+            echo "El plan se generó a partir del título y cuerpo de este Issue."
             echo
             echo "## Instrucciones para Copilot Cloud Agent"
-            echo "Lee el plan completo y el documento fuente. Inspecciona primero la arquitectura y los tests existentes. Implementa el cambio de forma incremental, agrega tests focalizados, actualiza documentación y ejecuta las validaciones del repositorio. No hagas merge directo."
+            echo "Lee este plan, inspecciona la arquitectura y los tests existentes, implementa el cambio de forma incremental, agrega tests focalizados y abre un Pull Request contra dev. No hagas merge directo."
             echo
             echo "## Plan de implementación"
             cat implementation-plan.md
-          } > copilot-implementation-issue.md
-          gh issue create \
-            --title "Implement feature ${FEATURE}" \
-            --label copilot-implementation \
-            --body-file copilot-implementation-issue.md
+          } > plan-comment.md
+          gh issue comment "$ISSUE" --body-file plan-comment.md
+          gh issue edit "$ISSUE" --add-label copilot-implementation
