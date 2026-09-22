@@ -18,7 +18,7 @@
     {"type":"timeseries","title":"Errores con Ollama / rag-engine","gridPos":{"h":8,"w":12,"x":0,"y":15},"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]},"targets":[{"refId":"A","expr":"sum by (dependency) (rate(api_go_dependency_requests_total{dependency=~\"ollama|rag-engine\",result=\"error\"}[$__rate_interval]))","legendFormat":"{{dependency}}"}]},
     {"type":"timeseries","title":"Peticiones por Segundo (RPS)","gridPos":{"h":8,"w":12,"x":12,"y":15},"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]},"targets":[{"refId":"A","expr":"sum(rate(api_go_http_requests_total{route=~\"/api/v1/query|/query/stream\"}[$__rate_interval]))","legendFormat":"requests/s"}]},
     {"type":"row","title":"Diagnóstico y Auditoría","gridPos":{"h":1,"w":24,"x":0,"y":23},"collapsed":false,"panels":[]},
-    {"type":"logs","title":"Logs de Consultas y Errores","gridPos":{"h":10,"w":24,"x":0,"y":24},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{service=~\"api-go|rag-engine\"} !~ \"(GET|POST) /(health|ready|metrics)(\\?| |$)\""}]},
+    {"type":"logs","title":"Logs de Consultas y Errores","gridPos":{"h":10,"w":24,"x":0,"y":24},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{service=~\"api-go|rag-engine\"} !~ \"(GET|POST) /(health|ready|metrics)([? ]|$)\""}]},
     {"type":"table","title":"Trazas de Peticiones API","gridPos":{"h":10,"w":24,"x":0,"y":34},"datasource":{"type":"tempo","uid":"tempo"},"targets":[{"refId":"A","queryType":"traceql","query":"{ resource.service.name = \"api-go\" }","tableType":"traces","limit":20}]}
   ]
 }
