@@ -765,11 +765,11 @@ El directorio `qdrant_storage/` se monta directamente desde el host, por lo que 
 
 ### Pendientes
 
-- Añadir un panel administrativo operativo para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
-- Añadir una cola de trabajos para indexación asíncrona y procesamiento por lotes.
-- Extender las pruebas de integración con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
-- Mejorar los dashboards con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
-- Explorar estrategias de caché y reindexación incremental para reducir tiempos de respuesta y carga.
+- Añadir un [panel administrativo operativo](features/07-ui-consulta-admin.md) para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
+- Añadir una [cola de trabajos](features/06-cola-indexacion.md) para indexación asíncrona y procesamiento por lotes.
+- Extender las [pruebas de integración](features/08-tests-integracion.md) con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
+- Mejorar los [dashboards operativos](features/10-dashboards-operativos.md) con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
+- Explorar estrategias de [caché y reindexación incremental](features/11-cache-reindexacion.md) para reducir tiempos de respuesta y carga.
 
 ---
 

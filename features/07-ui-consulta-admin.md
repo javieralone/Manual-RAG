@@ -1,4 +1,6 @@
-# UI de consulta y administración
+# 07 - Panel administrativo y gestión avanzada
+
+El MVP de consulta web ya está implementado en `frontend/`. Esta feature cubre su evolución hacia un panel administrativo operativo.
 
 ## Prioridad
 
@@ -6,7 +8,7 @@ P3 - media.
 
 ## Objetivo
 
-Proveer una capa visual para consultar el sistema y revisar resultados, contexto y logs de operación sin depender de cURL.
+Ampliar la UI existente para revisar consultas, contexto, métricas y estado operativo, además de gestionar usuarios y permisos sin depender de cURL.
 
 ## Problema actual
 
