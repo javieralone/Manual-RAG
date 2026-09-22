@@ -51,6 +51,8 @@ Respuesta generada
 
 Manual-RAG está diseñado como una solución distribuida orientada a servicios, con separación clara entre entrada HTTP, recuperación semántica, almacenamiento vectorial y generación de respuestas.
 
+Además, el repositorio incluye una interfaz web de consulta en React + Vite para autenticación, selección de colección y chat con soporte para consulta normal y streaming.
+
 ### Diagrama de alto nivel
 
 ```text
@@ -131,6 +133,14 @@ Manual-RAG/
 │   ├── Dockerfile
 │   └── README.md
 │
+├── frontend/                        # UI React + Vite para login y chat
+│   ├── src/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── .env.example
+│   └── README.md
+│
 ├── observability/                   # Métricas, trazas y logs
 │   ├── grafana/
 │   ├── loki/
@@ -155,6 +165,7 @@ Manual-RAG/
 |---|---|
 | `api-go` | Gateway público, autenticación, timeout, rate limiting y orquestación |
 | `rag-engine` | Generación de embeddings, búsqueda semántica y recuperación de contexto |
+| `frontend` | UI React + Vite para login, chat y selección de colección/modo |
 | `mcp-server` | Exposición del servicio RAG a clientes MCP |
 | `qdrant` | Base vectorial para búsqueda por similitud |
 | `ollama` | Generación final de respuesta a partir del contexto recuperado |
@@ -313,12 +324,12 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 > Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
 
-### `POST /query/stream`
+### `POST /api/v1/query/stream`
 
 Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`api-go/README.md`](api-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
 
 ```bash
-curl -N --no-buffer -X POST http://localhost:8080/query/stream \
+curl -N --no-buffer -X POST http://localhost:8080/api/v1/query/stream \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
@@ -394,15 +405,89 @@ Los scripts relacionados con este proceso se encuentran en:
 rag-engine/scripts/
 ```
 
-Ejemplos:
+La ingesta usa estas carpetas:
 
-```bash
-python rag-engine/scripts/ocr_manual.py
-python rag-engine/scripts/index_manual.py
-python rag-engine/scripts/upload_to_qdrant.py
+```text
+documents/
+├── new/        # PDFs pendientes
+├── reading/    # PDF en procesamiento
+└── completed/  # PDFs procesados correctamente
 ```
 
-Los nombres y parámetros exactos pueden variar según la configuración del proyecto.
+Para manuales divididos en varias partes, usa el mismo identificador y numera cada PDF:
+
+```text
+documents/new/manual-reparaciones-valiant__parte-001.pdf
+documents/new/manual-reparaciones-valiant__parte-002.pdf
+```
+
+Ejecuta el orquestador oficial desde la raíz del proyecto:
+
+```powershell
+python rag-engine/scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
+```
+
+`process_manual_opt.py` toma un PDF cada vez de `documents/new/<nombre_coleccion>`, lo mueve a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si todas las etapas terminan correctamente. Si falla o se interrumpe, vuelve a `new` y registra el error en `logs/ingestion.log`.
+
+La ingesta sigue el patrón de carpetas `documents/new/<nombre_coleccion>/`, `documents/reading/<nombre_coleccion>/` y `documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
+
+Ejemplo de estructura:
+
+```text
+documents/
+├── new/
+│   ├── manuales_tecnicos/
+│   │   ├── <nombre-manual>__parte-001.pdf
+│   │   └── <nombre-manual>__parte-002.pdf
+│   └── generic_manuals/
+│       └── <nombre-manual>__parte-001.pdf
+├── reading/
+│   ├── manuales_tecnicos/
+│   └── generic_manuals/
+└── completed/
+    ├── manuales_tecnicos/
+    └── generic_manuals/
+```
+
+El orquestador oficial es `process_manual_opt.py` y conserva los parámetros de OCR y rendimiento:
+
+```powershell
+python rag-engine/scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
+```
+
+También puedes procesar un PDF concreto o forzar una colección:
+
+```powershell
+python rag-engine/scripts/process_manual_opt.py --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf --collection manuales_tecnicos
+```
+
+Si la colección no se indica, se usa la inferida desde la carpeta `documents/new/<nombre_coleccion>/`. Cuando no hay carpeta compatible, el valor por defecto es `generic_manuals`.
+
+El OCR admite configuración adicional de salida, resolución y lenguaje:
+
+```bash
+python rag-engine/scripts/ocr_manual_opt.py \
+  --pdf documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
+  --output output/manual_pages.json \
+  --collection manuales_tecnicos \
+  --dpi 200 \
+  --language spa
+```
+
+Cada página se convierte a escala de grises, se mejora el contraste y se limpia antes de ejecutar Tesseract. Si el texto preprocesado tiene peor calidad que el resultado directo, se conserva el resultado directo como fallback. La variable `TESSERACT_CMD` permite indicar explícitamente el binario cuando no está disponible en el `PATH`.
+
+Para medir el impacto sobre recuperación, ejecuta la evaluación antes y después de regenerar los chunks y subirlos a Qdrant:
+
+```bash
+cd rag-engine
+python scripts/evaluate_rag.py --skip-generation
+```
 
 ---
 
@@ -449,6 +534,21 @@ Configuración actual:
 ```
 
 Esto permite que agentes compatibles con MCP puedan consultar el sistema RAG mediante herramientas externas.
+
+El servidor expone actualmente estas tools:
+
+```text
+search_manual(query, top_k=3, collection="generic_manuals", document_id=None, chapter=None, section=None)
+search_technical_manuals(query, top_k=3, document_id=None, chapter=None, section=None)
+```
+
+`search_manual` permite consultar cualquier colección válida de forma explícita. `search_technical_manuals` fija la colección del dominio técnico mediante `MCP_DOMAIN_COLLECTIONS`. Las consultas vacías y los valores de `top_k` fuera del rango `1..20` se rechazan.
+
+Para probarlo desde Copilot Chat, activa el servidor `manual-rag` y solicita, por ejemplo:
+
+```text
+Usa search_technical_manuals para buscar el procedimiento de mantenimiento del sistema de lubricación.
+```
 
 ---
 
@@ -513,14 +613,17 @@ go test ./...
 
 ## 🗂️ Servicios principales
 
-| Servicio | Responsabilidad |
-|---|---|
-| `api-go` | API Gateway y punto de entrada público |
-| `rag-engine` | Recuperación semántica y API interna |
-| `qdrant` | Base de datos vectorial |
-| `mcp-server` | Servidor MCP para agentes |
-| Ollama en el host | Generación de respuestas mediante un LLM |
-| `prometheus`, `grafana`, `loki`, `tempo` | Métricas, paneles, logs y trazas |
+| Servicio | Responsabilidad | Descripción / Función |
+| :--- | :--- | :--- |
+| `api-go` | API Gateway y punto de entrada público | Gestiona peticiones HTTP, valida solicitudes, aplica control de concurrencia y orquesta la comunicación con el motor RAG. |
+| `rag-engine` | Recuperación semántica y API interna | Genera embeddings de preguntas con `bge-m3`, realiza búsquedas vectoriales y construye el contexto para el LLM. |
+| `qdrant` | Base de datos vectorial | Almacena los vectores semánticos de los manuales y ejecuta búsquedas de similitud en tiempo real. |
+| `mcp-server` | Servidor MCP para agentes | Expone las herramientas y capacidades del sistema RAG para integrarse con clientes y agentes compatibles con MCP. |
+| Ollama (externo) | Generación de respuestas mediante un LLM | Debe ejecutarse en el equipo host; `api-go` lo alcanza mediante `host.docker.internal:11434`. No es un servicio definido en Docker Compose. |
+| `prometheus` | Recolector de métricas | Mide en tiempo real la latencia, tráfico, tasa de errores y disponibilidad de los componentes de la aplicación. |
+| `grafana` | Visualización y paneles | Dashboard unificado que muestra gráficas de rendimiento, alertas activas y logs de la infraestructura. |
+| `loki` | Almacenamiento y gestión de logs | Agrupa y centraliza los registros de texto emitidos por las aplicaciones para diagnosticar fallos y errores. |
+| `tempo` | Tracing / Rastreo distribuido | Mide el tiempo de ejecución exacto y el recorrido de las peticiones entre los distintos microservicios. |
 
 ---
 
@@ -544,7 +647,9 @@ HTTP_CLIENT_TIMEOUT=5m
 REQUEST_TIMEOUT=5m
 ```
 
-El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, la colección `manuales_tecnicos` y el modelo de embeddings `BAAI/bge-m3`. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
+El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, el valor por defecto `generic_manuals` para la colección y el modelo de embeddings `BAAI/bge-m3`. La colección puede seleccionarse explícitamente desde la API, MCP o la ingesta, y `manuales_tecnicos` sigue funcionando como una colección independiente y compatible. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
+
+El servidor MCP usa `MCP_PORT=8001` y el mapa `MCP_DOMAIN_COLLECTIONS` para asociar tools de dominio con colecciones Qdrant. El mapa debe incluir la clave `technical_manuals`; en el Compose actual apunta a `manuales_tecnicos`.
 
 No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
 
@@ -647,29 +752,24 @@ El directorio `qdrant_storage/` se monta directamente desde el host, por lo que 
 
 ---
 
-## 🛣️ Próximas mejoras
+## 🛣️ Estado y próximas mejoras
 
-El roadmap del proyecto puede enfocarse en tres grandes líneas: mejor experiencia de usuario, escalabilidad y calidad del RAG.
+### Capacidades ya implementadas
 
-### Experiencia y acceso
+- Interfaz web React + Vite con login, selección de colección, chat y consulta normal o streaming.
+- Evaluación automática del RAG con métricas de precisión, recall, groundedness y latencia.
+- OCR optimizado para manuales escaneados, con control de resolución, idioma y uso de memoria.
+- Soporte multi-colección y multi-manual, con filtros por documento, capítulo y sección.
+- Servidor MCP con herramientas por dominio y selección explícita de colección.
+- Observabilidad base con métricas Prometheus, logs JSON, trazas OpenTelemetry, Grafana, Loki y Tempo.
 
-- Desarrollar una interfaz web para consultar el sistema sin usar curl o clientes HTTP.
-- Añadir paneles de administración para revisar consultas, contexto recuperado y métricas de uso.
-- Mejorar la experiencia de autenticación y autorización para múltiples roles y permisos.
+### Pendientes
 
-### Calidad del RAG
-
-- Añadir evaluación automática de calidad de respuestas mediante groundedness, relevancia y precisión del contexto.
-- Incorporar filtros por documento, capítulo, sección o tipo de contenido.
-- Soportar múltiples colecciones o índices por familia de manuales.
-- Mejorar la extracción de texto OCR para documentos escaneados o con baja calidad.
-
-### Operabilidad y escalabilidad
-
-- Añadir una cola de trabajos para indexación asíncrona y procesamiento por lotes.
-- Extender las pruebas de integración con Docker Compose para validar flujos completos en entorno real.
-- Mejorar la observabilidad con dashboards más específicos por consulta, tiempo de recuperación y latencia de Ollama.
-- Explorar estrategias de caché y reindexación incremental para reducir tiempos de respuesta y carga.
+- Añadir un [panel administrativo operativo](features/07-ui-consulta-admin.md) para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
+- Añadir una [cola de trabajos](features/06-cola-indexacion.md) para indexación asíncrona y procesamiento por lotes.
+- Extender las [pruebas de integración](features/08-tests-integracion.md) con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
+- Mejorar los [dashboards operativos](features/10-dashboards-operativos.md) con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
+- Explorar estrategias de [caché y reindexación incremental](features/11-cache-reindexacion.md) para reducir tiempos de respuesta y carga.
 
 ---
 

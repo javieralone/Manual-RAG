@@ -78,11 +78,13 @@ SentenceTransformers
 Qdrant
 ```
 
-Colección:
+La colección por defecto es:
 
 ```text
-manuales_tecnicos
+generic_manuals
 ```
+
+Y también puede usarse explícitamente `manuales_tecnicos` u otra colección válida con el mismo formato `^[A-Za-z0-9_-]+$`.
 
 ---
 
@@ -101,6 +103,9 @@ manuales_tecnicos
 |-----------|------------|------------------|
 | `QDRANT_HOST` | Host de Qdrant | `qdrant` |
 | `QDRANT_PORT` | Puerto HTTP de Qdrant | `6333` |
+| `DEFAULT_COLLECTION` | Colección usada cuando no se indica otra | `generic_manuals` |
+| `MCP_DOMAIN_COLLECTIONS` | Mapa JSON de dominio MCP a colección Qdrant | `{"technical_manuals":"manuales_tecnicos"}` |
+| `MCP_PORT` | Puerto del servidor MCP | `8001` |
 | `OMP_NUM_THREADS` | Hilos para CPU | `2` |
 | `MKL_NUM_THREADS` | Hilos MKL | `2` |
 
@@ -111,7 +116,7 @@ manuales_tecnicos
 Construir y levantar el servicio:
 
 ```powershell
-docker compose up -d --build rag-engine
+docker compose up -d --build rag-engine mcp-server
 ```
 
 Consultar logs:
@@ -136,13 +141,14 @@ GET /health
 
 ```json
 {
-  "status": "UP"
+  "status": "ok",
+  "engine": "RAG Python FastAPI Clean Arch"
 }
 ```
 
 ## Readiness y métricas
 
-- `GET /ready`: verifica que Qdrant y el modelo de embeddings están disponibles.
+- `GET /ready`: verifica que Qdrant está disponible para atender búsquedas. El modelo de embeddings se carga al iniciar el proceso.
 - `GET /metrics`: expone métricas Prometheus de HTTP, embeddings, retrieval y Qdrant.
 
 El servicio escribe logs JSON en stdout y propaga el contexto W3C `traceparent`. Las trazas se exportan a Tempo cuando `OTEL_EXPORTER_OTLP_ENDPOINT` está configurado.
@@ -162,9 +168,58 @@ POST /search
 ```json
 {
   "query": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
-  "top_k": 3
+  "top_k": 3,
+  "collection": "manuales_tecnicos",
+  "document_id": "0-lubricacion-mantenimiento",
+  "chapter": "2",
+  "section": "2.1"
 }
 ```
+
+`collection` es opcional. Si no se envía, el servicio usa `generic_manuals`. Los filtros `document_id`, `chapter` y `section` son opcionales y se aplican conjuntamente sobre el payload de Qdrant dentro de la colección seleccionada.
+
+## OCR e indexación
+
+Los PDFs pendientes deben colgarse en `../documents/new/<nombre_coleccion>/`. El orquestador oficial es `process_manual_opt.py`:
+
+```powershell
+python scripts/process_manual_opt.py `
+  --fast-ocr `
+  --workers 2 `
+  --memory-mode disk
+```
+
+La colección se deriva de la carpeta y se mantiene a lo largo del flujo:
+
+```text
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/reading/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/completed/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+```
+
+`process_manual_opt.py` mueve el PDF a `reading`, ejecuta OCR, genera chunks, carga en Qdrant y solo al final lo mueve a `completed`. Si falla, lo devuelve a `new` y registra el error en `../logs/ingestion.log`.
+
+Para varias partes del mismo manual usa un identificador común:
+
+```text
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf
+../documents/new/manuales_tecnicos/<nombre-manual>__parte-002.pdf
+```
+
+Las partes se cargan dentro de la colección indicada con el mismo `document_id` y un número de parte distinto. Los IDs de Qdrant son deterministas, así que reintentar una parte no duplica sus puntos.
+
+Para manuales escaneados, el script OCR permite configurar el documento, la salida, la resolución y la colección:
+
+```bash
+python scripts/ocr_manual_opt.py \
+  --pdf ../documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
+  --output ../output/manual_pages.json \
+  --collection manuales_tecnicos \
+  --dpi 200 \
+  --language spa
+```
+
+Después de regenerar el JSON, ejecuta `index_manual.py` y `upload_to_qdrant.py --collection <nombre_coleccion>`. Para comparar precisión y recall, guarda un reporte con `python scripts/evaluate_rag.py --skip-generation` antes y después del reprocesamiento.
 
 ### Response
 
@@ -175,7 +230,12 @@ POST /search
       "page": 12,
       "source": "manual_tecnico.pdf",
       "text": "El mantenimiento del sistema de lubricación requiere...",
-      "score": 0.895
+      "score": 0.895,
+      "metadata": {
+        "document_id": "0-lubricacion-mantenimiento",
+        "chapter": "2",
+        "section": "2.1"
+      }
     }
   ]
 }
@@ -191,11 +251,24 @@ El archivo:
 app/mcp_server.py
 ```
 
-expone la herramienta MCP:
+expone las herramientas MCP:
 
 ```python
-search_manual(query: str, top_k: int = 3) -> str
+search_manual(query: str, top_k: int = 3, collection: str = "generic_manuals") -> str
+search_technical_manuals(query: str, top_k: int = 3) -> str
 ```
+
+`search_manual` conserva la compatibilidad existente, usa `generic_manuals` por defecto y permite seleccionar una colección explícita. `search_technical_manuals` consulta la colección configurada para el dominio `technical_manuals`. Ambas tools aceptan los filtros opcionales `document_id`, `chapter` y `section`, y devuelven colección, documento, fuente, página y parte cuando están disponibles.
+
+El mapa de dominios se configura con `MCP_DOMAIN_COLLECTIONS`, por ejemplo:
+
+```json
+{"technical_manuals":"manuales_tecnicos"}
+```
+
+La clave `technical_manuals` debe estar presente en el mapa porque la tool `search_technical_manuals` la consulta directamente.
+
+El servidor comparte el proveedor de embeddings y mantiene una caché de `RAGService` por colección. MCP se expone en `http://localhost:8001/mcp` cuando se ejecuta con Docker Compose.
 
 Iniciar localmente:
 
@@ -296,3 +369,5 @@ LLM
    ▼
 Respuesta final
 ```
+
+Para que los filtros funcionen sobre datos existentes, hay que volver a ejecutar `index_manual.py` y `upload_to_qdrant.py` después de cambiar los metadatos.

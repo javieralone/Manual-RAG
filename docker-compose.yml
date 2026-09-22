@@ -66,6 +66,8 @@ services:
       - HF_HOME=/app/.cache/huggingface
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - DEFAULT_COLLECTION=generic_manuals
+      - MCP_DOMAIN_COLLECTIONS={"technical_manuals":"manuales_tecnicos"}
       - MCP_PORT=8001
       - OMP_NUM_THREADS=2
       - MKL_NUM_THREADS=2
@@ -123,6 +125,19 @@ services:
     depends_on:
       rag-engine:
         condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - api-go
     restart: unless-stopped
 
   prometheus:

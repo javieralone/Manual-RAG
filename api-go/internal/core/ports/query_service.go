@@ -1,13 +1,17 @@
 package ports
 
 import (
-	"context"
 	"api-go/internal/core/domain"
+	"context"
 )
 
 // QueryUseCase defines el contrato del caso de uso principal
 type QueryUseCase interface {
 	ExecuteQuery(ctx context.Context, question string) (*domain.QueryResponse, error)
+}
+
+type FilteredQueryUseCase interface {
+	ExecuteQueryWithFilters(ctx context.Context, question string, filters domain.QueryFilters) (*domain.QueryResponse, error)
 }
 
 // StreamSink recibe los eventos estructurados de una respuesta en streaming.
@@ -23,4 +27,8 @@ type StreamSink interface {
 // QueryStreamUseCase defines el contrato del caso de uso de consulta en streaming
 type QueryStreamUseCase interface {
 	ExecuteQueryStream(ctx context.Context, question string, sink StreamSink) error
+}
+
+type FilteredQueryStreamUseCase interface {
+	ExecuteQueryStreamWithFilters(ctx context.Context, question string, filters domain.QueryFilters, sink StreamSink) error
 }

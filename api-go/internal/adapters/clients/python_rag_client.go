@@ -14,8 +14,12 @@ import (
 )
 
 type pythonSearchRequest struct {
-	Query string `json:"query"`
-	TopK  int    `json:"top_k"`
+	Query      string `json:"query"`
+	TopK       int    `json:"top_k"`
+	Collection string `json:"collection,omitempty"`
+	DocumentID string `json:"document_id,omitempty"`
+	Chapter    string `json:"chapter,omitempty"`
+	Section    string `json:"section,omitempty"`
 }
 
 type pythonSearchResponse struct {
@@ -37,11 +41,23 @@ func NewPythonRAGClient(baseURL string, httpClient *http.Client, metrics *observ
 }
 
 func (c *PythonRAGClient) RetrieveContext(ctx context.Context, query string, topK int) ([]domain.DocumentChunk, error) {
+	return c.retrieveContext(ctx, query, topK, domain.QueryFilters{})
+}
+
+func (c *PythonRAGClient) RetrieveContextWithFilters(ctx context.Context, query string, topK int, filters domain.QueryFilters) ([]domain.DocumentChunk, error) {
+	return c.retrieveContext(ctx, query, topK, filters)
+}
+
+func (c *PythonRAGClient) retrieveContext(ctx context.Context, query string, topK int, filters domain.QueryFilters) ([]domain.DocumentChunk, error) {
 	ctx, span := otel.Tracer("manual-rag/api-go").Start(ctx, "rag-engine /search")
 	defer span.End()
 	reqBody, err := json.Marshal(pythonSearchRequest{
-		Query: query,
-		TopK:  topK,
+		Query:      query,
+		TopK:       topK,
+		Collection: filters.Collection,
+		DocumentID: filters.DocumentID,
+		Chapter:    filters.Chapter,
+		Section:    filters.Section,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error serializando request para rag-engine: %w", err)

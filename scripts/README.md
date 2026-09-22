@@ -13,20 +13,20 @@ Este directorio centraliza las herramientas que permiten a la IA trabajar con fl
 ## Convención recomendada
 
 - Nombres de rama: `feature/<numero>-<descripcion-corta>`
-- Ejemplo: `feature/03-filtros-documentos`
+- Ejemplo: `feature/04-mejora-ocr`
 - Cada feature pendiente debe venir de un objetivo documentado en [features/README.md](../features/README.md)
 
 ## Flujo de ejecución
 
 ```bash
-./scripts/orchestrate-feature.sh --feature 03-filtros-documentos --push
+./scripts/orchestrate-feature.sh --feature 04-mejora-ocr --push
 ```
 
 Esto hace lo siguiente:
 
-1. crea o selecciona la rama `feature/03-filtros-documentos`
+1. crea o selecciona la rama `feature/04-mejora-ocr`
 2. ejecuta la validación general del proyecto
-3. si la validación pasa, hace commit y push
+3. si la validación pasa y se proporciona `--push`, hace commit y push
 4. no avanza a la siguiente feature si la validación falla
 
 ## Validación obligatoria antes de merge
@@ -38,3 +38,5 @@ Se recomienda ejecutar:
 ```
 
 Esto cubre validación básica de Go, Python y la configuración de Docker Compose.
+
+En Windows, `orchestrate-feature.ps1` usa `validate-pr.sh`, por lo que requiere Git Bash disponible en el `PATH`. El script PowerShell no sustituye ese validador Bash.

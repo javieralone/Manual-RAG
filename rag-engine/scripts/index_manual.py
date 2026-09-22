@@ -36,20 +36,32 @@ print("Creando chunks con metadatos...")
 for item in pages_data:
     page_num = item.get("page", 0)
     text = item.get("text", "")
-    
-    if not text.strip():
-        continue
-        
+    source = item.get("source", "0-lubricacion-mantenimiento.pdf")
+    document_id = item.get("document_id", Path(source).stem)
+    part = item.get("part", 1)
+    collection = item.get("collection", "generic_manuals")
+    chapter = item.get("chapter")
+    section = item.get("section")
+
     page_chunks = text_splitter.split_text(text)
-    
+
     for idx, chunk_text in enumerate(page_chunks):
+        metadata = {
+            "page": page_num,
+            "source": source,
+            "document_id": document_id,
+            "part": part,
+            "collection": collection,
+        }
+        if chapter:
+            metadata["chapter"] = chapter
+        if section:
+            metadata["section"] = section
+
         all_chunks.append({
             "id": f"page_{page_num}_chunk_{idx}",
             "text": chunk_text,
-            "metadata": {
-                "page": page_num,
-                "source": "0-lubricacion-mantenimiento.pdf"
-            }
+            "metadata": metadata
         })
 
 # Asegurar que la carpeta output exista antes de guardar

@@ -4,7 +4,7 @@ import time
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from app.core.domain.schemas import SearchQuery, SearchResponse
+from app.core.domain.schemas import SearchQuery, SearchResponse, DEFAULT_COLLECTION
 from app.adapters.bge_embedding_adapter import BGEEmbeddingAdapter
 from app.adapters.qdrant_adapter import QdrantAdapter
 from app.services.rag_service import RAGService
@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
-COLLECTION_NAME = "manuales_tecnicos"
+DEFAULT_QDRANT_COLLECTION = os.getenv("DEFAULT_COLLECTION", DEFAULT_COLLECTION)
 
 # --- COMPOSITION ROOT (Singletons) ---
 configure_logging()
@@ -29,7 +29,7 @@ if otlp_endpoint:
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)))
     trace.set_tracer_provider(provider)
 embedding_adapter = BGEEmbeddingAdapter(model_name="BAAI/bge-m3")
-qdrant_adapter = QdrantAdapter(host=QDRANT_HOST, port=QDRANT_PORT, collection_name=COLLECTION_NAME)
+qdrant_adapter = QdrantAdapter(host=QDRANT_HOST, port=QDRANT_PORT, collection_name=DEFAULT_QDRANT_COLLECTION)
 rag_service_instance = RAGService(embedding_provider=embedding_adapter, vector_store=qdrant_adapter)
 
 def get_rag_service() -> RAGService:
@@ -74,15 +74,32 @@ def metrics():
 
 @app.post("/search", response_model=SearchResponse)
 def search_chunks(
-    request: SearchQuery, 
+    request: SearchQuery,
     rag_service: RAGService = Depends(get_rag_service)
 ):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="La consulta 'query' no puede estar vacía.")
 
     try:
-        return rag_service.execute_search(query_text=request.query, top_k=request.top_k)
-    except Exception as e:
+        collection_name = request.resolved_collection
+        filters = {
+            key: value
+            for key, value in {
+                "document_id": request.document_id,
+                "chapter": request.chapter,
+                "section": request.section,
+            }.items()
+            if value
+        }
+        return rag_service.execute_search(
+            query_text=request.query,
+            top_k=request.top_k,
+            filters=filters,
+            collection_name=collection_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
         errors_total.labels(component="search").inc()
         logging.getLogger(__name__).exception("rag_search_failed")
         raise HTTPException(

@@ -1,15 +1,16 @@
 # Roadmap de features pendientes
 
-Este directorio organiza las mejoras pendientes del proyecto por prioridad de implementación y por dependencias técnicas. Las features 01, 02 y 09 ya están implementadas y no forman parte de este roadmap.
+Esta carpeta contiene únicamente trabajo pendiente. Las capacidades de observabilidad base, evaluación RAG, filtros, OCR optimizado, multi-colección, MCP multi-colección y el MVP de la UI ya están implementadas y se documentan en los README correspondientes.
 
-## Orden recomendado
+## Orden de implementación
 
-1. [03 - Filtros por documento, capítulo y sección](03-filtros-documentos.md)
-2. [04 - Mejora de OCR para manuales escaneados](04-mejora-ocr.md)
-3. [05 - Soporte multi-colección y multi-manual](05-soporte-multi-coleccion.md)
-4. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
-5. [07 - UI de consulta y administración](07-ui-consulta-admin.md)
-6. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
+El orden sigue las dependencias técnicas entre funcionalidades:
+
+1. [06 - Cola de indexación y procesamiento asíncrono](06-cola-indexacion.md)
+2. [07 - Panel administrativo y gestión avanzada](07-ui-consulta-admin.md) — completa el MVP existente de frontend
+3. [10 - Dashboards operativos de consulta](10-dashboards-operativos.md)
+4. [08 - Tests de integración y regresión end-to-end](08-tests-integracion.md)
+5. [11 - Caché y reindexación incremental](11-cache-reindexacion.md)
 
 ## Principio de priorización
 
@@ -20,25 +21,23 @@ Las tareas se han ordenado con dos criterios:
 
 ### Dependencias clave
 
-- Los filtros y multi-colección dependen de un vocabulario estable de metadatos y de una estrategia de indexación consistente.
-- La cola de procesamiento es más útil cuando ya hay una estructura clara de documentos y metadatos.
-- La UI y los tests de integración suelen hacerse después de estabilizar la capa de negocio y la infraestructura.
+- La cola debe estabilizar el procesamiento de documentos antes de exponer su estado en una UI administrativa.
+- Los dashboards deben construirse sobre métricas y contratos estables del gateway, la ingesta y el retrieval.
+- Los tests end-to-end deben cubrir primero la cola, la administración y los principales flujos observables.
+- La caché y la reindexación incremental necesitan métricas y pruebas de regresión para medir mejoras sin ocultar errores ni servir resultados obsoletos.
 
 ## Estado sugerido por fase
 
-### Fase 1: estabilización y medición
-- 01 - Base de observabilidad y métricas de consulta
-- 02 - Evaluación automática de calidad del RAG
-
-### Fase 1: mejora del contenido y la búsqueda
-- 03 - Filtros por documento, capítulo y sección
-- 04 - Mejora de OCR para manuales escaneados
-- 05 - Soporte multi-colección y multi-manual
-
-### Fase 2: escalabilidad y producto
+### Fase 1: procesamiento y producto
 - 06 - Cola de indexación y procesamiento asíncrono
-- 07 - UI de consulta y administración
+- 07 - Panel administrativo y gestión avanzada
+
+### Fase 2: operación y calidad
+- 10 - Dashboards operativos de consulta
 - 08 - Tests de integración y regresión end-to-end
+
+### Fase 3: rendimiento
+- 11 - Caché y reindexación incremental
 
 ---
 

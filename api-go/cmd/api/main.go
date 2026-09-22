@@ -82,7 +82,7 @@ func main() {
 		rateLimit = middlewares.RateLimitMiddleware(config.RateLimitRequests, config.RateLimitWindow, metrics, logger)
 	}
 	router := adaptersHTTP.NewRouter(queryHandler, authHandler, healthHandler, authenticate, authorize, rateLimit)
-	handlerWithMiddleware := middlewares.TraceMiddleware(middlewares.MetricsMiddleware(metrics)(middlewares.TimeoutMiddleware(config.RequestTimeout)(router)))
+	handlerWithMiddleware := middlewares.CORSMiddleware()(middlewares.TraceMiddleware(middlewares.MetricsMiddleware(metrics)(middlewares.TimeoutMiddleware(config.RequestTimeout)(router))))
 
 	logger.Info("api_gateway_started", "port", config.HTTPPort, "worker_limit", config.WorkerLimit, "readiness_interval", config.ReadinessInterval.String())
 	if err := http.ListenAndServe(config.HTTPPort, handlerWithMiddleware); err != nil {

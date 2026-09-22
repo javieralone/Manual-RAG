@@ -10,3 +10,7 @@ opentelemetry-sdk
 opentelemetry-instrumentation-fastapi
 opentelemetry-exporter-otlp
 ollama
+Pillow
+pdf2image
+pytesseract
+langchain-text-splitters

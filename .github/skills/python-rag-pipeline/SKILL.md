@@ -15,6 +15,6 @@ argument-hint: 'Describe the retrieval, ingestion, or MCP behavior to change.'
 
 ## Runtime facts
 - Embedding model: `BAAI/bge-m3` through the embedding adapter.
-- Vector store: Qdrant collection `manuales_tecnicos`.
+- Vector store: Qdrant collection `generic_manuals` by default; `manuales_tecnicos` remains an explicitly selectable collection and the default technical MCP domain target.
 - HTTP service: port `8000`; MCP service: port `8001`.
 - Runtime data lives under `documents/`, `output/`, and `qdrant_storage/`.
