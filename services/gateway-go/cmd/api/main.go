@@ -44,6 +44,7 @@ func main() {
 	// 1. Adaptadores Secundarios
 	resilience := clients.ResilienceConfig{Retries: config.RetryAttempts, Backoff: config.RetryBackoff, MaxFailures: config.CircuitFailures, ResetAfter: config.CircuitReset}
 	ragAdapter := clients.NewPythonRAGClient(config.PythonEngineURL, httpClient, metrics, resilience)
+	ingestionAdapter := clients.NewIngestionClient(config.IngestionAPIURL, httpClient)
 	ollamaAdapter := clients.NewOllamaClient(config.OllamaURL, config.OllamaModel, httpClient, metrics, resilience)
 	tokenService, err := authadapters.NewJWTService(
 		config.Auth.JWTSecret,
@@ -78,6 +79,7 @@ func main() {
 
 	// 4. Handler
 	queryHandler := handlers.NewQueryHandler(useCaseWithWorkerPool)
+	ingestionHandler := handlers.NewIngestionHandler(ingestionAdapter)
 	authHandler := handlers.NewAuthHandler(authService, logger, metrics, handlers.RefreshCookieConfig{Secure: config.Auth.CookieSecure, MaxAge: int(config.Auth.RefreshTTL.Seconds())})
 	healthHandler := handlers.NewHealthHandler(metrics,
 		clients.NewURLHealthChecker(strings.TrimRight(config.PythonEngineURL, "/")+"/ready", httpClient),
@@ -95,7 +97,7 @@ func main() {
 	if config.RateLimitEnabled {
 		rateLimit = middlewares.RateLimitMiddleware(config.RateLimitRequests, config.RateLimitWindow, metrics, logger)
 	}
-	router := adaptersHTTP.NewRouter(queryHandler, authHandler, healthHandler, authenticate, authorize, rateLimit)
+	router := adaptersHTTP.NewRouter(queryHandler, authHandler, healthHandler, ingestionHandler, authenticate, authorize, rateLimit)
 	handlerWithMiddleware := middlewares.CORSMiddleware()(middlewares.TraceMiddleware(middlewares.MetricsMiddleware(metrics)(middlewares.TimeoutMiddleware(config.RequestTimeout)(middlewares.BodyLimitMiddleware(config.MaxRequestBodyBytes)(router)))))
 
 	server := &http.Server{Addr: config.HTTPPort, Handler: handlerWithMiddleware, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: config.RequestTimeout, IdleTimeout: 60 * time.Second}

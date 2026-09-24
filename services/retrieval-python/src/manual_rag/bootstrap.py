@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from manual_rag.adapters.bge_embedding_adapter import BGEEmbeddingAdapter
 from manual_rag.adapters.qdrant_adapter import QdrantAdapter
@@ -37,4 +38,27 @@ def get_rag_service(collection: str = DEFAULT_QDRANT_COLLECTION) -> RAGService:
     return RAGService(
         embedding_provider=get_embedding_adapter(),
         vector_store=get_qdrant_adapter(collection_name),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_ingestion_job_service():
+    import redis
+    from rq import Queue
+
+    from manual_rag.adapters.redis_ingestion_job_store import RedisIngestionJobStore
+    from manual_rag.adapters.minio_object_storage import MinioObjectStorage
+    from manual_rag.application.ingestion_jobs import IngestionJobService
+
+    connection = redis.Redis.from_url(os.getenv("INGESTION_REDIS_URL", "redis://localhost:6379/2"))
+    store = RedisIngestionJobStore(
+        connection,
+        prefix=os.getenv("INGESTION_REDIS_PREFIX", "manual-rag:ingestion"),
+    )
+    queue = Queue(os.getenv("INGESTION_QUEUE", "ingestion"), connection=connection)
+    return IngestionJobService(
+        store=store,
+        queue=queue,
+        local_root=Path(os.getenv("INGESTION_LOCAL_ROOT", "data/documents/new")),
+        storage=MinioObjectStorage.from_environment(),
     )

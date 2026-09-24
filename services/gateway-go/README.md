@@ -343,7 +343,7 @@ docker compose --env-file .env.local up -d --build api-go
 ### Probar compilación local
 
 ```bash
-cd api-go
+cd services/gateway-go
 
 go mod tidy
 go build -v ./...

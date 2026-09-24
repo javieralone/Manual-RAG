@@ -1,0 +1,13 @@
+from typing import Protocol
+
+from manual_rag.domain.ingestion import IngestionJob
+
+
+class IngestionJobStore(Protocol):
+    def get(self, job_id: str) -> IngestionJob | None: ...
+
+    def save(self, job: IngestionJob) -> None: ...
+
+    def claim_identity(self, collection: str, file_sha256: str, job_id: str) -> str | None: ...
+
+    def list_jobs(self) -> list[IngestionJob]: ...

@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -14,7 +15,7 @@ DOCUMENTS_DIR = BASE_DIR / "data" / "documents"
 NEW_DIR = DOCUMENTS_DIR / "new"
 READING_DIR = DOCUMENTS_DIR / "reading"
 COMPLETED_DIR = DOCUMENTS_DIR / "completed"
-LOG_DIR = BASE_DIR / "logs"
+LOG_DIR = Path(os.getenv("INGESTION_LOG_DIR", str(BASE_DIR / "logs")))
 LOG_FILE = LOG_DIR / "ingestion.log"
 LOCK_FILE = LOG_DIR / "ingestion.lock"
 DEFAULT_COLLECTION = "generic_manuals"
@@ -30,6 +31,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--dpi", type=int, default=150)
     parser.add_argument("--language", default="spa")
     parser.add_argument("--python", default=sys.executable)
+    parser.add_argument("--pages-output", type=Path, default=None)
+    parser.add_argument("--chunks-output", type=Path, default=None)
+    parser.add_argument("--job-id", default=None)
+    parser.add_argument("--object-key", default="")
+    parser.add_argument("--file-sha256", default="")
+    parser.add_argument("--ingested-at", default=None)
 
     # Parámetros de optimización para ocr_manual.py
     parser.add_argument(
@@ -134,8 +141,8 @@ def require_non_empty_json(path: Path, key: str) -> None:
 
 
 def process_pdf(pdf_path: Path, arguments: argparse.Namespace, collection_name: str | None = None) -> str:
-    pages_path = BASE_DIR / "data" / "artifacts" / "manual_pages.json"
-    chunks_path = BASE_DIR / "data" / "artifacts" / "manual_chunks.json"
+    pages_path = arguments.pages_output or BASE_DIR / "data" / "artifacts" / "manual_pages.json"
+    chunks_path = arguments.chunks_output or BASE_DIR / "data" / "artifacts" / "manual_chunks.json"
     document_id, part = document_identity(pdf_path)
     collection_name = validate_collection_name(collection_name or infer_collection_name(pdf_path, arguments.collection))
 
@@ -160,10 +167,25 @@ def process_pdf(pdf_path: Path, arguments: argparse.Namespace, collection_name: 
     run_step("1/3 OCR", ocr_command)
     require_non_empty_json(pages_path, "text")
 
-    run_step("2/3 indexacion", [arguments.python, str(SCRIPTS_DIR / "index_manual.py")])
+    run_step("2/3 indexacion", [
+        arguments.python, str(SCRIPTS_DIR / "index_manual.py"),
+        "--pages-input", str(pages_path), "--chunks-output", str(chunks_path),
+    ])
     require_non_empty_json(chunks_path, "text")
 
-    run_step("3/3 carga en Qdrant", [arguments.python, str(SCRIPTS_DIR / "upload_to_qdrant.py"), "--collection", collection_name])
+    upload_command = [
+        arguments.python, str(SCRIPTS_DIR / "upload_to_qdrant.py"),
+        "--collection", collection_name, "--chunks-input", str(chunks_path),
+    ]
+    for option, value in (
+        ("--job-id", arguments.job_id),
+        ("--object-key", arguments.object_key),
+        ("--file-sha256", arguments.file_sha256),
+        ("--ingested-at", arguments.ingested_at),
+    ):
+        if value:
+            upload_command.extend([option, value])
+    run_step("3/3 carga en Qdrant", upload_command)
     return collection_name
 
 
@@ -199,16 +221,17 @@ def process_queued_pdf(source: Path, arguments: argparse.Namespace, logger: logg
 def main() -> int:
     arguments = parse_arguments()
     logger = configure_logging()
+    if arguments.pdf:
+        pdf_path = arguments.pdf.resolve()
+        if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
+            raise FileNotFoundError(f"El archivo no existe o no es PDF: {pdf_path}")
+        process_pdf(pdf_path, arguments, validate_collection_name(arguments.collection) if arguments.collection else infer_collection_name(pdf_path))
+        return 0
+
     for directory in (NEW_DIR, READING_DIR, COMPLETED_DIR):
         directory.mkdir(parents=True, exist_ok=True)
 
     with ingestion_lock():
-        if arguments.pdf:
-            pdf_path = arguments.pdf.resolve()
-            if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
-                raise FileNotFoundError(f"El archivo no existe o no es PDF: {pdf_path}")
-            process_pdf(pdf_path, arguments, validate_collection_name(arguments.collection) if arguments.collection else infer_collection_name(pdf_path))
-            return 0
 
         queued_files = []
         for collection_dir in sorted(NEW_DIR.iterdir(), key=lambda item: item.name):

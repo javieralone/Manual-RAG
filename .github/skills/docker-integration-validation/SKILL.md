@@ -22,6 +22,8 @@ argument-hint: 'Describe the service flow or integration failure to validate.'
 - Prometheus: `9090`; Grafana: `3000`; Loki: `3100`; Tempo: `3200`; OTLP: `4317/4318`.
 - Go uses `PYTHON_ENGINE_URL` and `OLLAMA_URL`.
 - RAG uses `QDRANT_HOST`, `QDRANT_PORT`, and bounded CPU thread settings.
+- Feature 01 must isolate ingestion Redis keys/DB from gateway refresh sessions, provide MinIO bucket and persistent job-state wiring, and allow `docker compose up --scale ingestion-worker=2` without shared workspace collisions.
 
 ## Reporting
 Separate configuration errors, application errors, unavailable dependencies, and data/model initialization failures. Do not alter persistent vector data during validation.
+For ingestion, validate enqueue -> worker -> status, retry/DLQ behavior, duplicate skip, Qdrant provenance payloads, and workspace cleanup with fixtures before using a real embedding model.
