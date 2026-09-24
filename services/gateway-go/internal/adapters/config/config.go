@@ -12,26 +12,27 @@ import (
 )
 
 type Config struct {
-	PythonEngineURL   string
-	OllamaURL         string
-	OllamaModel       string
-	HTTPPort          string
-	HTTPClientTimeout time.Duration
-	RequestTimeout    time.Duration
+	PythonEngineURL     string
+	IngestionAPIURL     string
+	OllamaURL           string
+	OllamaModel         string
+	HTTPPort            string
+	HTTPClientTimeout   time.Duration
+	RequestTimeout      time.Duration
 	MaxRequestBodyBytes int64
-	ReadinessInterval time.Duration
-	ShutdownTimeout   time.Duration
-	RetryAttempts     int
-	RetryBackoff      time.Duration
-	CircuitFailures   int
-	CircuitReset      time.Duration
-	WorkerLimit       int
-	RateLimitEnabled  bool
-	RateLimitRequests int
-	RateLimitWindow   time.Duration
-	SessionRedisURL   string
-	OTLPEndpoint      string
-	Auth              AuthConfig
+	ReadinessInterval   time.Duration
+	ShutdownTimeout     time.Duration
+	RetryAttempts       int
+	RetryBackoff        time.Duration
+	CircuitFailures     int
+	CircuitReset        time.Duration
+	WorkerLimit         int
+	RateLimitEnabled    bool
+	RateLimitRequests   int
+	RateLimitWindow     time.Duration
+	SessionRedisURL     string
+	OTLPEndpoint        string
+	Auth                AuthConfig
 }
 
 type AuthConfig struct {
@@ -128,25 +129,26 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		PythonEngineURL:   envOrDefault("PYTHON_ENGINE_URL", "http://rag-engine:8000"),
-		OllamaURL:         envOrDefault("OLLAMA_URL", "http://host.docker.internal:11434"),
-		OllamaModel:       envOrDefault("OLLAMA_MODEL", "qwen2.5:1.5b"),
-		HTTPPort:          envOrDefault("HTTP_PORT", ":8080"),
-		HTTPClientTimeout: httpClientTimeout,
-		RequestTimeout:    requestTimeout,
+		PythonEngineURL:     envOrDefault("PYTHON_ENGINE_URL", "http://rag-engine:8000"),
+		IngestionAPIURL:     envOrDefault("INGESTION_API_URL", "http://ingestion-api:8000"),
+		OllamaURL:           envOrDefault("OLLAMA_URL", "http://host.docker.internal:11434"),
+		OllamaModel:         envOrDefault("OLLAMA_MODEL", "qwen2.5:1.5b"),
+		HTTPPort:            envOrDefault("HTTP_PORT", ":8080"),
+		HTTPClientTimeout:   httpClientTimeout,
+		RequestTimeout:      requestTimeout,
 		MaxRequestBodyBytes: maxRequestBodyBytes,
-		ReadinessInterval: readinessInterval,
-		ShutdownTimeout:   shutdownTimeout,
-		RetryAttempts:     retryAttempts,
-		RetryBackoff:      retryBackoff,
-		CircuitFailures:   circuitFailures,
-		CircuitReset:      circuitReset,
-		WorkerLimit:       workerLimit,
-		RateLimitEnabled:  boolEnv("RATE_LIMIT_ENABLED", true),
-		RateLimitRequests: rateLimitRequests,
-		RateLimitWindow:   rateLimitWindow,
-		SessionRedisURL:   envOrDefault("AUTH_SESSION_REDIS_URL", "redis://redis:6379/0"),
-		OTLPEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		ReadinessInterval:   readinessInterval,
+		ShutdownTimeout:     shutdownTimeout,
+		RetryAttempts:       retryAttempts,
+		RetryBackoff:        retryBackoff,
+		CircuitFailures:     circuitFailures,
+		CircuitReset:        circuitReset,
+		WorkerLimit:         workerLimit,
+		RateLimitEnabled:    boolEnv("RATE_LIMIT_ENABLED", true),
+		RateLimitRequests:   rateLimitRequests,
+		RateLimitWindow:     rateLimitWindow,
+		SessionRedisURL:     envOrDefault("AUTH_SESSION_REDIS_URL", "redis://redis:6379/0"),
+		OTLPEndpoint:        os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Auth: AuthConfig{
 			JWTSecret:         accessSecret,
 			RefreshSecret:     refreshSecret,

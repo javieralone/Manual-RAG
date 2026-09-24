@@ -37,6 +37,7 @@
 - Use `observability-specialist` for metrics, Prometheus, Grafana, dashboards, logs, Loki, Promtail, Alloy, traces, Tempo, OpenTelemetry, OTLP, TraceQL, LogQL, alerts, readiness, scraping, or telemetry correlation.
 - Use `integration-reviewer` for Docker Compose, Dockerfiles, startup, runtime smoke tests, cross-service contracts, health checks, resource limits, and regression review.
 - Use `ingestion-specialist` for Redis RQ, MinIO, ingestion API, job lifecycle, worker isolation, retries/DLQ, deduplication, pipeline parameterization, or Qdrant ingestion metadata.
+- Use `readme-maintainer` for README.md updates, documentation reviews, setup instructions, service contracts, operational runbooks, and synchronizing docs with the implementation.
 
 ## Automatic task routing
 - Select the most specific specialist based on the task keywords above before editing.

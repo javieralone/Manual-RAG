@@ -1,6 +1,7 @@
 import os
 import socket
 import subprocess
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -57,16 +58,23 @@ def process_ingestion_job(job_id: str, serialized_job: dict[str, Any]) -> dict[s
             timed_out=isinstance(error, subprocess.TimeoutExpired),
         )
         raise
+    finally:
+        if job.temporary_local_path and job.local_path:
+            with contextlib.suppress(OSError):
+                Path(job.local_path).unlink()
 
 
 def main() -> None:
     import redis
-    from rq import Connection, Queue, Worker
+    from rq import Queue, Worker
 
     connection = redis.Redis.from_url(os.getenv("INGESTION_REDIS_URL", "redis://localhost:6379/2"))
     queue = Queue(os.getenv("INGESTION_QUEUE", "ingestion"), connection=connection)
-    with Connection(connection):
-        Worker([queue], name=os.getenv("INGESTION_WORKER_NAME", socket.gethostname())).work()
+    Worker(
+        [queue],
+        connection=connection,
+        name=os.getenv("INGESTION_WORKER_NAME", socket.gethostname()),
+    ).work()
 
 
 if __name__ == "__main__":

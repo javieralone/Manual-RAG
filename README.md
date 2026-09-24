@@ -246,8 +246,20 @@ cd Manual-RAG
 Construye y levanta los servicios:
 
 ```bash
-docker compose up -d --build
+Copy-Item .env.example .env.local
+# Completa los secretos marcados como replace-with-* antes de iniciar.
+docker compose --env-file .env.local up -d --build
 ```
+
+El Compose base publica `api-go` en `8080`, `rag-engine` en `8000`, MCP en `8001`, la API de ingestion en `8002`, frontend en `5173`, Qdrant en `6333`/`6334`, MinIO en `9000`/`9001` y el stack de observabilidad en `3000`, `9090`, `3100` y `3200`. Ollama no forma parte del Compose: debe estar disponible en el host en `11434`.
+
+Para una puesta en producción con proxy y redes internas usa el overlay, que publica únicamente `80` y `443`:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+La configuración de producción requiere además `DOMAIN` y `CERTBOT_EMAIL`. No ejecutes el overlay sin completar secretos y DNS.
 
 Comprueba el estado de los contenedores:
 
@@ -406,6 +418,14 @@ Generación de embeddings
    ▼
 Almacenamiento en Qdrant
 ```
+
+### Ingestion asíncrona
+
+El Compose base incluye `redis`, `minio`, `ingestion-api` y `ingestion-worker`. La API se publica localmente en `http://localhost:8002` y permite encolar trabajos con `POST /ingestion/enqueue`, consultar `GET /ingestion/jobs` o `GET /ingestion/jobs/{job_id}`, y listar fallos con `GET /ingestion/failed`. Los trabajos usan Redis DB 2 (`INGESTION_REDIS_URL`) y el gateway mantiene sus sesiones en Redis DB 0; no mezcles ambos usos.
+
+El worker conserva el pipeline de scripts y aplica reintentos y timeouts configurables mediante `INGESTION_MAX_RETRIES`, `INGESTION_JOB_TIMEOUT_SECONDS` e `INGESTION_PIPELINE_TIMEOUT_SECONDS`. MinIO se configura con `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD`. La entrada local compatible usa `data/documents/new` mediante `local_path` dentro de `INGESTION_LOCAL_ROOT`.
+
+Este flujo y el procesamiento directo con `process_manual_opt.py` son caminos distintos que actualmente coexisten; el comando directo descrito abajo no pasa por Redis ni por la API de ingestion.
 
 Los scripts relacionados con este proceso se encuentran en:
 
@@ -679,7 +699,10 @@ docker compose --env-file .env.local up -d --build
 | API Gateway | `8080` |
 | RAG Engine | `8000` |
 | MCP | `8001` |
+| API de ingestion | `8002` |
+| Frontend | `5173` |
 | Qdrant | `6333` (HTTP), `6334` (gRPC) |
+| MinIO | `9000` (API), `9001` (consola) |
 | Grafana | `3000` |
 | Prometheus | `9090` |
 | Loki | `3100` |
@@ -702,7 +725,7 @@ También puedes reconstruir las imágenes:
 ```bash
 docker compose down
 docker compose build --no-cache
-docker compose up -d
+docker compose --env-file .env.local up -d
 ```
 
 ### El modelo de embeddings tarda en cargar

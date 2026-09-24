@@ -47,6 +47,8 @@ class IngestionJobService:
         if existing_id:
             existing = self.store.get(existing_id)
             if existing:
+                if request.pdf_path is None:
+                    source.unlink(missing_ok=True)
                 return existing
 
         now = datetime.now(timezone.utc)
@@ -58,16 +60,22 @@ class IngestionJobService:
             object_key=request.object_key,
             bucket=request.bucket,
             local_path=str(source),
+            temporary_local_path=request.pdf_path is None,
             created_at=now,
         )
-        self.store.save(job)
-        self.queue.enqueue(
-            "manual_rag.entrypoints.worker.process_ingestion_job",
-            job.job_id,
-            job.to_dict(),
-            job_timeout=int(os.getenv("INGESTION_JOB_TIMEOUT_SECONDS", "1800")),
-            retry=self._retry_policy(),
-        )
+        try:
+            self.store.save(job)
+            self.queue.enqueue(
+                "manual_rag.entrypoints.worker.process_ingestion_job",
+                job.job_id,
+                job.to_dict(),
+                job_timeout=int(os.getenv("INGESTION_JOB_TIMEOUT_SECONDS", "1800")),
+                retry=self._retry_policy(),
+            )
+        except Exception:
+            if request.pdf_path is None:
+                source.unlink(missing_ok=True)
+            raise
         return job
 
     @staticmethod

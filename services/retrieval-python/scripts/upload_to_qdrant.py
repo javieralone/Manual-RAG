@@ -130,4 +130,5 @@ client.upsert(
     points=points,
 )
 
-print(f"\n ¡Listo! {len(points)} puntos subidos correctamente a Qdrant en '{COLLECTION_NAME}'.")
+print(f"\n ¡Listo! {len(points)} puntos subidos correctamente a Qdrant en '{COLLECTION_NAME}'.", flush=True)
+os._exit(0)

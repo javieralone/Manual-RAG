@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -54,8 +55,11 @@ class IngestionRunner:
                  "--job-id", job_id, "--object-key", request.object_key,
                  "--file-sha256", file_sha256],
             ]
+            environment = os.environ.copy()
+            environment["INGESTION_LOG_DIR"] = str(workspace / "logs")
+            pipeline_timeout = int(os.getenv("INGESTION_PIPELINE_TIMEOUT_SECONDS", "900"))
             for command in commands:
-                subprocess.run(command, check=True)
+                subprocess.run(command, check=True, env=environment, timeout=pipeline_timeout)
             status = JobStatus.COMPLETED
         except subprocess.TimeoutExpired:
             status = JobStatus.TIMEOUT

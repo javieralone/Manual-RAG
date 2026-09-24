@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -14,7 +15,7 @@ DOCUMENTS_DIR = BASE_DIR / "data" / "documents"
 NEW_DIR = DOCUMENTS_DIR / "new"
 READING_DIR = DOCUMENTS_DIR / "reading"
 COMPLETED_DIR = DOCUMENTS_DIR / "completed"
-LOG_DIR = BASE_DIR / "logs"
+LOG_DIR = Path(os.getenv("INGESTION_LOG_DIR", str(BASE_DIR / "logs")))
 LOG_FILE = LOG_DIR / "ingestion.log"
 LOCK_FILE = LOG_DIR / "ingestion.lock"
 DEFAULT_COLLECTION = "generic_manuals"
@@ -220,16 +221,17 @@ def process_queued_pdf(source: Path, arguments: argparse.Namespace, logger: logg
 def main() -> int:
     arguments = parse_arguments()
     logger = configure_logging()
+    if arguments.pdf:
+        pdf_path = arguments.pdf.resolve()
+        if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
+            raise FileNotFoundError(f"El archivo no existe o no es PDF: {pdf_path}")
+        process_pdf(pdf_path, arguments, validate_collection_name(arguments.collection) if arguments.collection else infer_collection_name(pdf_path))
+        return 0
+
     for directory in (NEW_DIR, READING_DIR, COMPLETED_DIR):
         directory.mkdir(parents=True, exist_ok=True)
 
     with ingestion_lock():
-        if arguments.pdf:
-            pdf_path = arguments.pdf.resolve()
-            if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
-                raise FileNotFoundError(f"El archivo no existe o no es PDF: {pdf_path}")
-            process_pdf(pdf_path, arguments, validate_collection_name(arguments.collection) if arguments.collection else infer_collection_name(pdf_path))
-            return 0
 
         queued_files = []
         for collection_dir in sorted(NEW_DIR.iterdir(), key=lambda item: item.name):

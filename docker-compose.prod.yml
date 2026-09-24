@@ -14,6 +14,17 @@ services:
   redis:
     networks: [backend]
 
+  minio:
+    ports: !reset []
+    networks: [backend]
+
+  ingestion-api:
+    ports: !reset []
+    networks: [backend]
+
+  ingestion-worker:
+    networks: [backend]
+
   api-go:
     ports: !reset []
     networks: [backend]
@@ -82,6 +93,7 @@ services:
 volumes:
   certbot_conf:
   certbot_webroot:
+  minio_data:
 
 networks:
   edge:

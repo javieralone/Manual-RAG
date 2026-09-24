@@ -44,6 +44,7 @@ class IngestionJob:
     object_key: str = ""
     bucket: str = ""
     local_path: str = ""
+    temporary_local_path: bool = False
     created_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -62,6 +63,7 @@ class IngestionJob:
             "object_key": self.object_key,
             "bucket": self.bucket,
             "local_path": self.local_path,
+            "temporary_local_path": self.temporary_local_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
@@ -85,6 +87,7 @@ class IngestionJob:
             object_key=value.get("object_key", ""),
             bucket=value.get("bucket", ""),
             local_path=value.get("local_path", ""),
+            temporary_local_path=bool(value.get("temporary_local_path", False)),
             created_at=parse_timestamp(value.get("created_at")),
             started_at=parse_timestamp(value.get("started_at")),
             finished_at=parse_timestamp(value.get("finished_at")),
