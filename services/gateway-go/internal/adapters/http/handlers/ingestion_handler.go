@@ -18,22 +18,30 @@ func NewIngestionHandler(client *clients.IngestionClient) *IngestionHandler {
 }
 
 func (h *IngestionHandler) HandleEnqueue(w http.ResponseWriter, r *http.Request) {
-	h.proxy(w, r, http.MethodPost, "/ingestion/enqueue")
+	h.proxy(w, r, http.MethodPost, "/ingestion/enqueue", "application/json")
 }
 
 func (h *IngestionHandler) HandleJobs(w http.ResponseWriter, r *http.Request) {
-	h.proxy(w, r, http.MethodGet, "/ingestion/jobs")
+	h.proxy(w, r, http.MethodGet, "/ingestion/jobs", "")
 }
 
 func (h *IngestionHandler) HandleJob(w http.ResponseWriter, r *http.Request) {
-	h.proxy(w, r, http.MethodGet, "/ingestion/jobs/"+r.PathValue("job_id"))
+	h.proxy(w, r, http.MethodGet, "/ingestion/jobs/"+r.PathValue("job_id"), "")
 }
 
 func (h *IngestionHandler) HandleFailed(w http.ResponseWriter, r *http.Request) {
-	h.proxy(w, r, http.MethodGet, "/ingestion/failed")
+	h.proxy(w, r, http.MethodGet, "/ingestion/failed", "")
 }
 
-func (h *IngestionHandler) proxy(w http.ResponseWriter, r *http.Request, method, path string) {
+func (h *IngestionHandler) HandleStorageOptions(w http.ResponseWriter, r *http.Request) {
+	h.proxy(w, r, http.MethodGet, "/ingestion/storage/options", "")
+}
+
+func (h *IngestionHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
+	h.proxy(w, r, http.MethodPost, "/ingestion/upload", r.Header.Get("Content-Type"))
+}
+
+func (h *IngestionHandler) proxy(w http.ResponseWriter, r *http.Request, method, path, contentType string) {
 	var body io.Reader
 	if r.Body != nil {
 		payload, err := io.ReadAll(r.Body)
@@ -43,7 +51,7 @@ func (h *IngestionHandler) proxy(w http.ResponseWriter, r *http.Request, method,
 		}
 		body = bytes.NewReader(payload)
 	}
-	status, payload, err := h.client.Proxy(r.Context(), method, path, body)
+	status, payload, err := h.client.Proxy(r.Context(), method, path, contentType, body)
 	if err != nil {
 		response.WriteError(w, http.StatusBadGateway, "servicio de ingesta no disponible")
 		return

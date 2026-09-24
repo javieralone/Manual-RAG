@@ -30,3 +30,18 @@ class MinioObjectStorage:
             self.client.make_bucket(bucket)
         destination.parent.mkdir(parents=True, exist_ok=True)
         self.client.fget_object(bucket, object_key, str(destination))
+
+    def list_buckets(self) -> list[str]:
+        return sorted(bucket.name for bucket in self.client.list_buckets())
+
+    def list_object_keys(self, bucket: str) -> list[str]:
+        if not bucket:
+            return []
+        return sorted(item.object_name for item in self.client.list_objects(bucket, recursive=True))
+
+    def upload(self, bucket: str, object_key: str, source: object, length: int, content_type: str) -> None:
+        if not bucket or not object_key:
+            raise ValueError("bucket y object_key son obligatorios")
+        if not self.client.bucket_exists(bucket):
+            self.client.make_bucket(bucket)
+        self.client.put_object(bucket, object_key, source, length=length, content_type=content_type)

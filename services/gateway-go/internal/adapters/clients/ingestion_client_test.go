@@ -22,7 +22,7 @@ func TestIngestionClientProxyForwardsJSONRequest(t *testing.T) {
 	defer server.Close()
 
 	client := NewIngestionClient(server.URL, server.Client())
-	status, payload, err := client.Proxy(context.Background(), http.MethodPost, "/ingestion/enqueue", strings.NewReader(`{"local_path":"manual.pdf"}`))
+	status, payload, err := client.Proxy(context.Background(), http.MethodPost, "/ingestion/enqueue", "application/json", strings.NewReader(`{"local_path":"manual.pdf"}`))
 	if err != nil {
 		t.Fatalf("proxy returned error: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestIngestionClientProxyReturnsErrorForServerFailure(t *testing.T) {
 	defer server.Close()
 
 	client := NewIngestionClient(server.URL, server.Client())
-	_, _, err := client.Proxy(context.Background(), http.MethodGet, "/ingestion/jobs", nil)
+	_, _, err := client.Proxy(context.Background(), http.MethodGet, "/ingestion/jobs", "", nil)
 	if err == nil {
 		t.Fatal("expected upstream failure")
 	}

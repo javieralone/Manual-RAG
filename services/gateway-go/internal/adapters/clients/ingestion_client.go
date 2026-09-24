@@ -17,12 +17,14 @@ func NewIngestionClient(baseURL string, httpClient *http.Client) *IngestionClien
 	return &IngestionClient{baseURL: strings.TrimRight(baseURL, "/"), httpClient: httpClient}
 }
 
-func (c *IngestionClient) Proxy(ctx context.Context, method, path string, body io.Reader) (int, []byte, error) {
+func (c *IngestionClient) Proxy(ctx context.Context, method, path, contentType string, body io.Reader) (int, []byte, error) {
 	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return 0, nil, err
 	}
-	request.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
 	response, err := c.httpClient.Do(request)
 	if err != nil {
 		return 0, nil, err

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim-bookworm
 
 # Evitar prompts interactivos durante la instalación
@@ -19,10 +20,12 @@ ENV PYTHONPATH=/app/src
 COPY requirements.txt .
 
 # 2. Instalar la versión exclusiva de PyTorch para CPU
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # 3. Instalar el resto de dependencias de Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 COPY . .
 

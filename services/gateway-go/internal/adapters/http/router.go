@@ -26,6 +26,10 @@ func NewRouter(queryHandler *handlers.QueryHandler, authHandler *handlers.AuthHa
 	mux.Handle("/api/v1/ingestion/jobs/{job_id}", protectedJob)
 	protectedFailed := authenticate(authorize(rateLimit(http.HandlerFunc(ingestionHandler.HandleFailed))))
 	mux.Handle("/api/v1/ingestion/failed", protectedFailed)
+	protectedStorage := authenticate(authorize(rateLimit(http.HandlerFunc(ingestionHandler.HandleStorageOptions))))
+	mux.Handle("/api/v1/ingestion/storage/options", protectedStorage)
+	protectedUpload := authenticate(authorize(rateLimit(http.HandlerFunc(ingestionHandler.HandleUpload))))
+	mux.Handle("/api/v1/ingestion/upload", protectedUpload)
 
 	mux.HandleFunc("/api/v1/auth/login", authHandler.HandleLogin)
 	mux.HandleFunc("/api/v1/auth/refresh", authHandler.HandleRefresh)

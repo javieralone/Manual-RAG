@@ -13,15 +13,15 @@ export function buildHeaders(token, extra = {}) {
 export async function handleApiResponse(response) {
   if (!response.ok) {
     let message = 'Error del servidor';
+    const text = await response.text();
     try {
-      const data = await response.json();
+      const data = text ? JSON.parse(text) : null;
       if (data && data.error) {
         message = data.error;
       } else if (data && data.detail) {
         message = data.detail;
       }
     } catch {
-      const text = await response.text();
       if (text) message = text;
     }
 
