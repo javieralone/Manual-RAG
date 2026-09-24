@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { login as loginRequest, logout as logoutRequest, refreshToken as refreshTokenRequest } from './api/auth';
 import { askNormalQuery, askStreamQuery } from './api/chat';
+import { getStorageOptions, uploadDocument } from './api/ingestion';
 
 const DEFAULT_COLLECTION = 'manuales_tecnicos';
+const PDF_NAME_PATTERN = /^.+__parte-\d{3}\.pdf$/i;
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('manual-rag-token') || '');
@@ -16,6 +18,14 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [contextItems, setContextItems] = useState([]);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [storageOptions, setStorageOptions] = useState([]);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadBucket, setUploadBucket] = useState('manuals');
+  const [uploadObjectKey, setUploadObjectKey] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploading, setUploading] = useState(false);
   const streamCursorRef = useRef('');
   const activeRequestRef = useRef(null);
   const bottomRef = useRef(null);
@@ -121,6 +131,72 @@ function App() {
       setError(err.message || 'No se pudo renovar la sesión');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openUploadModal = async () => {
+    setUploadError('');
+    setUploadMessage('');
+    setIsUploadOpen(true);
+    try {
+      const result = await getStorageOptions(token);
+      setStorageOptions(result.buckets || []);
+    } catch (err) {
+      setUploadError(err.message || 'No se pudo cargar el almacenamiento.');
+    }
+  };
+
+  const handleUploadFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setUploadFile(file);
+    setUploadError('');
+    setUploadMessage('');
+    if (file && !PDF_NAME_PATTERN.test(file.name)) {
+      setUploadError('El archivo debe llamarse <nombre_manual>__parte-xxx.pdf.');
+      return;
+    }
+    if (file && !uploadObjectKey) {
+      setUploadObjectKey(`generic_manuals/${file.name}`);
+    }
+  };
+
+  const handleBucketChange = (event) => {
+    setUploadBucket(event.target.value);
+    setUploadObjectKey('');
+  };
+
+  const handleUpload = async (event) => {
+    event.preventDefault();
+    if (!uploadFile || !uploadBucket || !uploadObjectKey.trim()) return;
+    if (!PDF_NAME_PATTERN.test(uploadFile.name)) {
+      setUploadError('El archivo debe llamarse <nombre_manual>__parte-xxx.pdf.');
+      return;
+    }
+    if (uploadObjectKey.split('/').pop() !== uploadFile.name) {
+      setUploadError('El object_key debe terminar con el nombre original del PDF.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    setUploadMessage('Subiendo y encolando documento...');
+    try {
+      const result = await uploadDocument({
+        token,
+        file: uploadFile,
+        bucket: uploadBucket,
+        objectKey: uploadObjectKey.trim(),
+      });
+      setUploadMessage(`Job ${result.job_id} creado: ${result.status}.`);
+      const refreshed = await getStorageOptions(token);
+      setStorageOptions(refreshed.buckets || []);
+      setUploadFile(null);
+      event.target.reset();
+    } catch (err) {
+      setUploadError(err.message || 'No se pudo subir el documento.');
+      setUploadMessage('');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -286,6 +362,9 @@ function App() {
           >
             Renovar sesión
           </button>
+          <button className="upload-trigger" onClick={openUploadModal} type="button">
+            Subir PDF
+          </button>
         </div>
       </header>
 
@@ -353,6 +432,76 @@ function App() {
           {error && <div className="error-box compact">{error}</div>}
         </aside>
       </main>
+
+      {isUploadOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setIsUploadOpen(false);
+        }}>
+          <section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+            <div className="modal-heading">
+              <div>
+                <p className="label">INGESTA</p>
+                <h2 id="upload-title">Subir manual a MinIO</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setIsUploadOpen(false)} aria-label="Cerrar modal">
+                ×
+              </button>
+            </div>
+
+            <form className="upload-form" onSubmit={handleUpload}>
+              <label>
+                Bucket
+                <select value={uploadBucket} onChange={handleBucketChange}>
+                  {storageOptions.length === 0 && <option value="manuals">manuals</option>}
+                  {storageOptions.map((bucket) => (
+                    <option key={bucket.name} value={bucket.name}>{bucket.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Object key existente
+                <select
+                  value={storageOptions.find((bucket) => bucket.name === uploadBucket)?.object_keys.includes(uploadObjectKey) ? uploadObjectKey : ''}
+                  onChange={(event) => setUploadObjectKey(event.target.value)}
+                >
+                  <option value="">Seleccionar o escribir uno nuevo</option>
+                  {(storageOptions.find((bucket) => bucket.name === uploadBucket)?.object_keys || []).map((key) => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Object key
+                <input
+                  type="text"
+                  value={uploadObjectKey}
+                  onChange={(event) => setUploadObjectKey(event.target.value)}
+                  placeholder="generic_manuals/manual__parte-001.pdf"
+                  required
+                />
+              </label>
+
+              <label>
+                Archivo PDF
+                <input type="file" accept="application/pdf,.pdf" onChange={handleUploadFileChange} required />
+              </label>
+
+              <p className="upload-hint">Formato requerido: &lt;nombre_manual&gt;__parte-xxx.pdf</p>
+              {uploadError && <div className="error-box compact">{uploadError}</div>}
+              {uploadMessage && <div className="success-box">{uploadMessage}</div>}
+
+              <div className="modal-actions">
+                <button className="ghost" type="button" onClick={() => setIsUploadOpen(false)}>Cerrar</button>
+                <button type="submit" disabled={uploading || !uploadFile || !uploadObjectKey.trim()}>
+                  {uploading ? 'Subiendo...' : 'Subir y encolar'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

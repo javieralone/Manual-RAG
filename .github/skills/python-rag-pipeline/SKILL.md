@@ -18,3 +18,6 @@ argument-hint: 'Describe the retrieval, ingestion, or MCP behavior to change.'
 - Vector store: Qdrant collection `generic_manuals` by default; `manuales_tecnicos` remains an explicitly selectable collection and the default technical MCP domain target.
 - HTTP service: port `8000`; MCP service: port `8001`.
 - Runtime data lives under `data/documents/`, `data/artifacts/`, and `data/local/qdrant/`.
+- Feature 01 must preserve the legacy folder-based flow while adding dynamic CLI paths for per-job PDF/pages/chunks; do not let worker jobs write shared runtime artifacts.
+- Upload metadata is a cross-cutting contract: `job_id`, `minio_object_key`, `file_sha256`, `ingested_at`, `collection`, `document_id`, `part`, `page`, and `source` must survive into Qdrant payloads.
+- Route queue orchestration, job persistence, MinIO adapters, retries, DLQ, and cleanup lifecycle to `ingestion-specialist` and use the dedicated `ingestion-pipeline` skill.

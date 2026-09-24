@@ -104,6 +104,8 @@ Y también puede usarse explícitamente `manuales_tecnicos` u otra colección v�
 | `OMP_NUM_THREADS` | Hilos para CPU | `2` |
 | `MKL_NUM_THREADS` | Hilos MKL | `2` |
 
+La ingesta asíncrona usa además `INGESTION_REDIS_URL` (por defecto `redis://localhost:6379/2`), `INGESTION_REDIS_PREFIX`, `INGESTION_QUEUE`, `INGESTION_LOCAL_ROOT`, `INGESTION_WORKSPACE_ROOT`, `INGESTION_SCRIPTS_DIR`, `INGESTION_JOB_TIMEOUT_SECONDS`, `INGESTION_PIPELINE_TIMEOUT_SECONDS` e `INGESTION_MAX_RETRIES`. Para el almacenamiento de objetos usa `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` y `MINIO_BUCKET`.
+
 ---
 
 # 🚀 Despliegue con Docker Compose
@@ -111,8 +113,16 @@ Y también puede usarse explícitamente `manuales_tecnicos` u otra colección v�
 Construir y levantar el servicio:
 
 ```powershell
-docker compose up -d --build rag-engine mcp-server
+docker compose --env-file .env.local up -d --build rag-engine mcp-server
 ```
+
+El mismo Compose incluye `ingestion-api` y `ingestion-worker`. La API queda publicada en `http://localhost:8002` y expone:
+
+- `POST /ingestion/enqueue` para crear un trabajo (también existe el alias interno `POST /ingestion/jobs`).
+- `GET /ingestion/jobs` y `GET /ingestion/jobs/{job_id}` para listar y consultar trabajos.
+- `GET /ingestion/failed` para consultar trabajos fallidos o agotados.
+
+El worker se inicia con `python -m manual_rag.entrypoints.worker` y procesa la cola Redis configurada por `INGESTION_QUEUE`. Este flujo asíncrono orquesta el pipeline existente en un workspace aislado por trabajo; el procesamiento directo con `process_manual_opt.py` sigue disponible para la transición y las pruebas locales.
 
 Consultar logs:
 

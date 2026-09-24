@@ -5,6 +5,10 @@ fastapi
 uvicorn
 mcp<2
 prometheus-client
+redis
+rq
+minio
+python-multipart
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-instrumentation-fastapi

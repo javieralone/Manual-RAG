@@ -3,7 +3,7 @@
 The stack provides Prometheus metrics, Grafana dashboards, Loki logs, and Tempo traces.
 
 - Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin by default; change `GRAFANA_ADMIN_PASSWORD`)
+- Grafana: http://localhost:3000 (usuario inicial `admin`; la contraseña se configura con la variable obligatoria `GRAFANA_ADMIN_PASSWORD`)
 - Loki: http://localhost:3100
 - Tempo: http://localhost:3200
 

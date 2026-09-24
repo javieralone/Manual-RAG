@@ -1,9 +1,11 @@
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -13,7 +15,15 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from manual_rag.bootstrap import DEFAULT_QDRANT_COLLECTION, get_qdrant_adapter, get_rag_service
+from pydantic import BaseModel, Field
+
+from manual_rag.bootstrap import (
+    DEFAULT_QDRANT_COLLECTION,
+    get_ingestion_job_service,
+    get_qdrant_adapter,
+    get_rag_service,
+)
+from manual_rag.domain.ingestion import IngestionRequest
 from manual_rag.domain.schemas import SearchQuery, SearchResponse
 from manual_rag.observability import (
     configure_logging,
@@ -48,6 +58,113 @@ app = FastAPI(
     lifespan=lifespan,
 )
 FastAPIInstrumentor.instrument_app(app)
+
+
+class IngestionSubmission(BaseModel):
+    local_path: str | None = Field(default=None, description="PDF local dentro de INGESTION_LOCAL_ROOT")
+    collection: str | None = None
+    bucket: str = ""
+    object_key: str = ""
+
+
+PDF_NAME_PATTERN = re.compile(r"^.+__parte-\d{3}\.pdf$", re.IGNORECASE)
+
+
+def validate_pdf_name(filename: str) -> None:
+    if not PDF_NAME_PATTERN.fullmatch(filename):
+        raise ValueError("El PDF debe llamarse <nombre_manual>__parte-xxx.pdf")
+
+
+@app.post("/ingestion/enqueue", status_code=202)
+@app.post("/ingestion/jobs", status_code=202, include_in_schema=False)
+def enqueue_ingestion(request: IngestionSubmission):
+    try:
+        job = get_ingestion_job_service().submit(IngestionRequest(
+            pdf_path=Path(request.local_path) if request.local_path else None,
+            collection=request.collection,
+            bucket=request.bucket,
+            object_key=request.object_key,
+        ))
+        return job.to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_enqueue_failed")
+        raise HTTPException(status_code=503, detail="No se pudo encolar la ingesta")
+
+
+@app.get("/ingestion/storage/options")
+def ingestion_storage_options():
+    try:
+        storage = get_ingestion_job_service().storage
+        buckets = storage.list_buckets()
+        return {"buckets": [{"name": bucket, "object_keys": storage.list_object_keys(bucket)} for bucket in buckets]}
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_storage_options_failed")
+        raise HTTPException(status_code=503, detail="No se pudo consultar el almacenamiento")
+
+
+@app.post("/ingestion/upload", status_code=202)
+async def upload_ingestion(
+    file: UploadFile = File(...),
+    bucket: str = Form(...),
+    object_key: str = Form(...),
+):
+    filename = (file.filename or "").strip()
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF")
+    try:
+        validate_pdf_name(filename)
+        if Path(object_key).name != filename:
+            raise ValueError("El object_key debe terminar con el nombre original del PDF")
+        storage = get_ingestion_job_service().storage
+        content_type = file.content_type or "application/pdf"
+        length = 0
+        contents = await file.read()
+        length = len(contents)
+        from io import BytesIO
+        storage.upload(bucket, object_key, BytesIO(contents), length, content_type)
+        return enqueue_ingestion(IngestionSubmission(bucket=bucket, object_key=object_key))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_upload_failed")
+        raise HTTPException(status_code=503, detail="No se pudo subir el documento")
+
+
+@app.get("/ingestion/jobs/{job_id}")
+def ingestion_status(job_id: str):
+    try:
+        job = get_ingestion_job_service().store.get(job_id)
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_status_failed")
+        raise HTTPException(status_code=503, detail="No se pudo consultar la ingesta")
+    if job is None:
+        raise HTTPException(status_code=404, detail="Trabajo de ingesta no encontrado")
+    return job.to_dict()
+
+
+@app.get("/ingestion/jobs")
+def ingestion_jobs():
+    try:
+        return [job.to_dict() for job in get_ingestion_job_service().store.list_jobs()]
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_list_failed")
+        raise HTTPException(status_code=503, detail="No se pudieron consultar las ingestas")
+
+
+@app.get("/ingestion/failed")
+def failed_ingestion_jobs():
+    try:
+        failed_statuses = {"FAILED", "FAILED_PERMANENTLY", "TIMEOUT"}
+        return [
+            job.to_dict()
+            for job in get_ingestion_job_service().store.list_jobs()
+            if job.status.value in failed_statuses
+        ]
+    except Exception:
+        logging.getLogger(__name__).exception("ingestion_failed_list_failed")
+        raise HTTPException(status_code=503, detail="No se pudieron consultar las ingestas fallidas")
 
 
 @app.middleware("http")

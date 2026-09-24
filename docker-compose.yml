@@ -12,6 +12,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: rag_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-manuals}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # 1. Base de datos vectorial
   qdrant:
     image: qdrant/qdrant:v1.19.1
@@ -70,6 +89,85 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
 
+  ingestion-api:
+    build:
+      context: ./services/retrieval-python
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      - INGESTION_REDIS_URL=redis://redis:6379/2
+      - INGESTION_REDIS_PREFIX=${INGESTION_REDIS_PREFIX:-manual-rag:ingestion}
+      - INGESTION_QUEUE=${INGESTION_QUEUE:-ingestion}
+      - INGESTION_LOCAL_ROOT=/app/documents/new
+      - INGESTION_WORKSPACE_ROOT=/tmp/manual-rag/jobs
+      - INGESTION_SCRIPTS_DIR=/app/scripts
+      - INGESTION_JOB_TIMEOUT_SECONDS=${INGESTION_JOB_TIMEOUT_SECONDS:-900}
+      - INGESTION_PIPELINE_TIMEOUT_SECONDS=${INGESTION_PIPELINE_TIMEOUT_SECONDS:-900}
+      - INGESTION_MAX_RETRIES=${INGESTION_MAX_RETRIES:-3}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-manuals}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+      - MINIO_BUCKET=${MINIO_BUCKET:-manuals}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    volumes:
+      - ./data/documents:/app/documents
+      - huggingface_cache:/app/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ingestion-worker:
+    build:
+      context: ./services/retrieval-python
+      dockerfile: Dockerfile
+    command: ["python", "-m", "manual_rag.entrypoints.worker"]
+    environment:
+      - INGESTION_REDIS_URL=redis://redis:6379/2
+      - INGESTION_REDIS_PREFIX=${INGESTION_REDIS_PREFIX:-manual-rag:ingestion}
+      - INGESTION_QUEUE=${INGESTION_QUEUE:-ingestion}
+      - INGESTION_LOCAL_ROOT=/app/documents/new
+      - INGESTION_WORKSPACE_ROOT=/tmp/manual-rag/jobs
+      - INGESTION_SCRIPTS_DIR=/app/scripts
+      - INGESTION_JOB_TIMEOUT_SECONDS=${INGESTION_JOB_TIMEOUT_SECONDS:-900}
+      - INGESTION_PIPELINE_TIMEOUT_SECONDS=${INGESTION_PIPELINE_TIMEOUT_SECONDS:-900}
+      - INGESTION_MAX_RETRIES=${INGESTION_MAX_RETRIES:-3}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-manuals}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+      - MINIO_BUCKET=${MINIO_BUCKET:-manuals}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OMP_NUM_THREADS=2
+      - MKL_NUM_THREADS=2
+    volumes:
+      - ./data/documents:/app/documents
+      - huggingface_cache:/app/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2.5g
+    restart: unless-stopped
+
   # 2b. Servidor MCP para GitHub Copilot / clientes MCP
   mcp-server:
     build:
@@ -119,6 +217,7 @@ services:
       - "8080:8080"
     environment:
       - PYTHON_ENGINE_URL=http://rag-engine:8000
+      - INGESTION_API_URL=http://ingestion-api:8000
       - OLLAMA_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET must be set}
@@ -155,6 +254,8 @@ services:
           memory: 256m
     depends_on:
       rag-engine:
+        condition: service_healthy
+      ingestion-api:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -266,3 +367,4 @@ volumes:
   tempo_data:
   promtail_positions:
   redis_data:
+  minio_data:
