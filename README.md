@@ -2,855 +2,312 @@
 
 Sistema de preguntas y respuestas basado en **Retrieval-Augmented Generation (RAG)** para consultar manuales técnicos utilizando lenguaje natural.
 
-El proyecto combina:
+El proyecto es una solución distribuida orientada a servicios que combina:
 
-- Un **API Gateway desarrollado en Go**.
-- Un **motor RAG desarrollado en Python**.
-- **Qdrant** como base de datos vectorial.
-- **Sentence Transformers** para generar embeddings.
-- **Ollama** para generar respuestas mediante un modelo local.
-- Un servidor **MCP** para permitir la integración con agentes y herramientas compatibles.
+* **API Gateway** desarrollado en **Go**.
 
----
+* **Motor RAG** desarrollado en **Python** (FastAPI / MCP).
+
+* **Frontend Web** desarrollado en **React + Vite**.
+
+* **Qdrant** como base de datos vectorial.
+
+* **Sentence Transformers** (`BAAI/bge-m3`) para embeddings.
+
+* **Ollama** para generación de respuestas mediante modelos de lenguaje locales.
+
+* **MinIO + Redis** para la ingesta de documentos asíncrona.
+
+* **Servidor MCP** para integración con agentes y herramientas compatibles.
+
+* **Stack de Observabilidad**: Prometheus, Grafana, Loki, Promtail y Tempo.
 
 ## 📚 Descripción general
 
-Manual-RAG permite cargar manuales técnicos, procesarlos, dividirlos en fragmentos, generar embeddings y almacenarlos en Qdrant.
+Manual-RAG permite cargar manuales técnicos en formato PDF, procesarlos, extraer su contenido mediante OCR optimizado, dividirlos en fragmentos, generar embeddings e indexarlos en Qdrant.
 
-Posteriormente, un usuario puede realizar preguntas como:
+Posteriormente, el usuario realiza preguntas en lenguaje natural como:
 
 > ¿Cómo se realiza el mantenimiento del sistema de lubricación?
 
-El sistema busca los fragmentos más relevantes del manual y los utiliza como contexto para generar una respuesta mediante un modelo de lenguaje.
+El sistema busca semánticamente los fragmentos más relevantes y los utiliza como contexto para generar una respuesta precisa mediante un modelo de lenguaje.
 
-El flujo principal es:
-
-```text
-Usuario
-   │
-   ▼
-API Gateway en Go
-   │
-   ▼
-Motor RAG en Python
-   │
-   ├── Generación de embedding de la pregunta
-   ├── Búsqueda semántica en Qdrant
-   └── Recuperación del contexto relevante
-   │
-   ▼
-Ollama
-   │
-   ▼
-Respuesta generada
-```
-
----
-
-## 🏗️ Arquitectura del proyecto
-
-Manual-RAG está diseñado como una solución distribuida orientada a servicios, con separación clara entre entrada HTTP, recuperación semántica, almacenamiento vectorial y generación de respuestas.
-
-Además, el repositorio incluye una interfaz web de consulta en React + Vite para autenticación, selección de colección y chat con soporte para consulta normal y streaming.
+## 🏗️ Arquitectura y Flujo del Sistema
 
 ### Diagrama de alto nivel
 
-```text
-Usuario / Cliente
-      │
-      ▼
-api-go (Gateway HTTP en Go)
-      │
-      ├── Valida autenticación y autorización
-      ├── Aplica rate limiting y timeouts
-      ├── Orquesta la consulta
-      ▼
-rag-engine (Motor RAG en Python)
-      │
-      ├── Genera embedding de la pregunta
-      ├── Consulta Qdrant por similitud semántica
-      ├── Recupera contextos relevantes
-      └── Devuelve el contexto y metadatos
-      │
-      ▼
-Qdrant (base vectorial)
-      │
-      ▼
-Ollama (modelo local de lenguaje)
-      │
-      ▼
-Respuesta final al cliente
+```
+               ┌───────────────────────────────┐
+               │    Usuario / Cliente Web      │
+               └───────────────┬───────────────┘
+                               │
+                               ▼
+               ┌───────────────────────────────┐
+               │  api-go (Gateway HTTP / Go)   │
+               │  - Auth (JWT/Refresh)         │
+               │  - Rate Limiting & Concurrencia│
+               └───────────────┬───────────────┘
+                               │
+                               ▼
+               ┌───────────────────────────────┐
+               │  rag-engine (Motor RAG Python)│
+               │  - Generación de embeddings   │
+               │  - Búsqueda semántica         │
+               └───────┬───────────────┬───────┘
+                       │               │
+                       ▼               ▼
+          ┌─────────────────┐   ┌───────────────┐
+          │     Qdrant      │   │    Ollama     │
+          │ (Base Vectorial)│   │ (Modelo LLM)  │
+          └─────────────────┘   └───────┬───────┘
+                                        │
+                                        ▼
+                                Resposta Final / Stream
+
 ```
 
-Además, el proyecto incluye:
+### Componentes y Responsabilidades
 
-- `mcp-server`: exposición del sistema a clientes MCP compatibles.
-- `prometheus`, `grafana`, `loki`, `promtail` y `tempo`: stack de observabilidad para métricas, logs y trazas.
+| 
 
-### Estructura del repositorio
+| **Componente** | **Descripción / Rol** | 
+| `api-go` | Gateway HTTP público, autenticación JWT, rate limiting, control de concurrencia y orquestación de solicitudes. | 
+| `rag-engine` | Servicio Python con Clean Architecture encargado de la generación de embeddings (`BAAI/bge-m3`) y recuperación semántica en Qdrant. | 
+| `apps/web` | Interfaz de usuario en React + Vite para login, selección de colecciones y chat (soporta respuestas estándar y SSE streaming). | 
+| `mcp-server` | Servidor compatible con Model Context Protocol (MCP) para exponer herramientas de consulta a agentes externos (ej. Copilot Chat). | 
+| `ingestion-api` / `worker` | Pipeline asíncrono basado en Redis DB 2 y MinIO para procesar, aplicar OCR e indexar documentos pesados. | 
+| `qdrant` | Base de datos vectorial para búsqueda por similitud de coseno/distancia. | 
+| `ollama` (externo) | Ejecutor local del modelo de lenguaje (ej. `qwen2.5:1.5b`), accesible vía host. | 
+| **Observabilidad** | `prometheus` (métricas), `grafana` (paneles), `loki`/`promtail` (logs centralizados) y `tempo` (trazado distribuido OTLP). | 
 
-```text
+> **Nota de Arquitectura:** El backend está implementado bajo los principios de **Clean Architecture** (Arquitectura Hexagonal), separando el dominio y los casos de uso de la infraestructura mediante puertos y adaptadores.
+
+## 📂 Estructura del Repositorio
+
+```
 Manual-RAG/
-├── .vscode/                         # Configuración del cliente MCP
-│   └── mcp.json
-├── services/gateway-go/             # Gateway HTTP y orquestación de consultas
-│   ├── cmd/
-│   │   └── api/
-│   │       └── main.go
-│   ├── internal/
-│   │   ├── core/
-│   │   │   ├── domain/
-│   │   │   ├── ports/
-│   │   ├── application/
-│   │   │   └── use_cases/
-│   │   ├── adapters/
-│   │   │   ├── auth/
-│   │   │   ├── clients/
-│   │   │   ├── decorators/
-│   │   │   ├── http/
-│   │   │   └── observability/
-│   │   └── README.md
-│   ├── Dockerfile
-│   ├── go.mod
-│   └── README.md
-│
-├── services/retrieval-python/       # Servicio de recuperación y embeddings
-│   ├── app/
-│   │   ├── main.py                    # Wrapper compatible FastAPI
-│   │   └── mcp_server.py              # Wrapper compatible MCP
-│   ├── src/manual_rag/
-│   │   ├── adapters/
-│   │   ├── application/
-│   │   ├── domain/
-│   │   ├── ports/
-│   │   ├── entrypoints/
-│   │   │   ├── http.py
-│   │   │   └── mcp.py
-│   │   ├── bootstrap.py
-│   │   └── observability.py
-│   ├── scripts/
-│   │   ├── index_manual.py
-│   │   ├── ocr_manual.py
-│   │   ├── query_rag.py
-│   │   ├── test_rag_direct.py
-│   │   └── upload_to_qdrant.py
-│   ├── tests/
-│   │   └── test_observability.py
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── README.md
-│
-├── apps/web/                        # UI React + Vite para login y chat
-│   ├── src/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── .env.example
-│   └── README.md
-│
-├── deploy/observability/            # Métricas, trazas y logs
-│   ├── grafana/
-│   ├── loki/
-│   ├── prometheus/
-│   ├── promtail/
-│   └── tempo/
-│
+├── apps/
+│   └── web/                         # Frontend React + Vite
+├── services/
+│   ├── gateway-go/                  # API Gateway en Go
+│   └── retrieval-python/            # Motor RAG, scripts e ingesta en Python
+│       ├── app/                     # Wrappers FastAPI y MCP
+│       ├── src/manual_rag/          # Arquitectura Hexagonal (domain, ports, adapters)
+│       └── scripts/                 # Scripts de indexación, OCR y evaluación
+├── deploy/
+│   └── observability/               # Configuración de Grafana, Loki, Prometheus, Tempo
 ├── data/
-│   ├── documents/                  # Manuales originales cargados al sistema
-│   ├── artifacts/                 # Artefactos generados durante procesamiento
-│   └── local/qdrant/               # Persistencia del índice vectorial
-├── .env.example                    # Plantilla de configuración
-├── .env.local                      # Configuración local con secretos (ignorada)
-├── .gitignore
-├── docker-compose.yml              # Orquestación de servicios
-├── README.md
-└── .github/
+│   ├── documents/                   # Estructura de documentos (new, reading, completed)
+│   ├── artifacts/                   # Artefactos temporales de procesamiento
+│   └── local/qdrant/                # Persistencia local de datos vectoriales
+├── .vscode/                         # Configuración del servidor MCP para clientes
+├── docker-compose.yml               # Orquestación para entorno de desarrollo
+├── docker-compose.prod.yml          # Overlay para despliegue en producción con proxy
+└── .env.example                     # Plantilla de variables de entorno
+
 ```
 
-### Componentes y responsabilidades
+## ⚙️ Requisitos previos
 
-| Componente | Rol principal |
-|---|---|
-| `api-go` | Gateway público, autenticación, timeout, rate limiting y orquestación |
-| `rag-engine` | Generación de embeddings, búsqueda semántica y recuperación de contexto |
-| `frontend` | UI React + Vite para login, chat y selección de colección/modo |
-| `mcp-server` | Exposición del servicio RAG a clientes MCP |
-| `qdrant` | Base vectorial para búsqueda por similitud |
-| `ollama` | Generación final de respuesta a partir del contexto recuperado |
-| `prometheus`, `grafana`, `loki`, `tempo` | Observabilidad centralizada del sistema |
+* **Docker** y **Docker Compose**
 
-> La implementación sigue una arquitectura limpia (Clean Architecture) con dominio, puertos y adaptadores bien definidos, evitando acoplamiento directo entre la lógica de negocio y los servicios externos.
+* **Git**
 
----
+* **Ollama** instalado y ejecutándose en el equipo host (`http://localhost:11434`) con un modelo previamente descargado (ej. `ollama run qwen2.5:1.5b`).
 
-## 🧩 Principios de diseño
+* Recurso recomendado: mínimo 8 GB de RAM (para soportar los modelos de embedding e inferencia simultáneamente).
 
-El proyecto sigue principios de arquitectura hexagonal y de **Clean Architecture** para mantener el sistema fácil de extender, testear y operar.
+Opcional (para desarrollo local sin Docker):
 
-### Separación de responsabilidades
+* **Go 1.22+**
 
-Cada capa tiene una misión concreta:
+* **Python 3.11+**
 
-- La API en Go recibe y valida requests HTTP.
-- El motor Python realiza la recuperación semántica y la lógica RAG.
-- Qdrant almacena y consulta embeddings para similitud.
-- Ollama genera la respuesta final con contexto relevante.
-- Los contratos entre capas se expresan mediante interfaces o puertos.
+* **Tesseract OCR** (si se ejecutan scripts de OCR directamente en la máquina host)
 
-### Inversión de dependencias
+## 🚀 Despliegue e Instalación
 
-El núcleo del sistema depende de abstracciones, no de implementaciones concretas.
+### 1. Clonar el repositorio y preparar credenciales
 
-Esto permite cambiar el modelo de embeddings, el cliente de búsqueda o la infraestructura sin reescribir la lógica principal. Un ejemplo claro es el adaptador de embeddings que implementa el contrato `EmbeddingPort`.
-
-### Control de concurrencia y resiliencia
-
-El gateway Go implementa control de concurrencia para evitar saturar la memoria y el CPU cuando hay varias consultas simultáneas.
-
-Además, las rutas de consulta aplican rate limiting por IP y usuario autenticado. Los parámetros `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS` y `RATE_LIMIT_WINDOW` permiten ajustar la protección. Si se excede la cuota, el sistema responde con `429 Too Many Requests`.
-
-### Cancelación y timeouts
-
-Las llamadas HTTP y los flujos de consulta usan contextos con timeout para evitar bloqueos, liberar recursos y responder correctamente cuando el cliente cancela una solicitud.
-
----
-
-## ⚙️ Requisitos
-
-Para ejecutar el proyecto necesitas:
-
-- Docker
-- Docker Compose
-- Git
-- Ollama, si se ejecuta fuera de Docker
-- Un modelo de lenguaje compatible con Ollama
-- Suficiente memoria RAM para ejecutar el modelo y el modelo de embeddings
-
-Opcionalmente:
-
-- Go 1.22 o superior
-- Python 3.11 o superior
-- Qdrant instalado localmente
-
----
-
-## 🚀 Ejecución con Docker Compose
-
-Clona el repositorio:
-
-```bash
+```
 git clone https://github.com/javieralone/Manual-RAG.git
 cd Manual-RAG
+
+# Copiar el archivo de variables de entorno
+cp .env.example .env.local
+
 ```
 
-Construye y levanta los servicios:
+> ⚠️ **Importante:** Edita `.env.local` y asigna valores reales a las variables marcadas como `replace-with-*` (`AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_PASSWORD_HASH`, etc.) antes de continuar.
 
-```bash
-Copy-Item .env.example .env.local
-# Completa los secretos marcados como replace-with-* antes de iniciar.
+### 2. Iniciar el entorno de desarrollo
+
+```
 docker compose --env-file .env.local up -d --build
+
 ```
 
-El Compose base publica `api-go` en `8080`, `rag-engine` en `8000`, MCP en `8001`, la API de ingestion en `8002`, frontend en `5173`, Qdrant en `6333`/`6334`, MinIO en `9000`/`9001` y el stack de observabilidad en `3000`, `9090`, `3100` y `3200`. Ollama no forma parte del Compose: debe estar disponible en el host en `11434`.
+### 3. Iniciar el entorno de producción (Overlay)
 
-Para una puesta en producción con proxy y redes internas usa el overlay, que publica únicamente `80` y `443`:
+Para entornos productivos que requieran un reverse proxy y gestión SSL con Certbot (publica en puertos `80` y `443` únicamente):
 
-```bash
+```
 docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
 ```
 
-La configuración de producción requiere además `DOMAIN` y `CERTBOT_EMAIL`. No ejecutes el overlay sin completar secretos y DNS.
+*(Requiere configurar `DOMAIN` y `CERTBOT_EMAIL` en las variables de entorno).*
 
-Comprueba el estado de los contenedores:
+## 📦 Ingesta e Indexación de Documentos
 
-```bash
-docker compose ps
+El procesamiento de manuales sigue este flujo de estados de archivo dentro del directorio `data/documents/`:
+
+```
+data/documents/
+├── new/<nombre_coleccion>/       # Documentos entrantes
+├── reading/<nombre_coleccion>/   # En proceso activo de OCR / indexación
+└── completed/<nombre_coleccion>/ # Procesados con éxito
+
 ```
 
-Consulta los logs:
+### Método 1: Ingesta Asíncrona (Recomendado vía API)
 
-```bash
-docker compose logs -f
+El sistema integra un pipeline asíncrono con `ingestion-api` (disponible en `http://localhost:8002`), `ingestion-worker`, Redis y MinIO:
+
+* **Encolar trabajo:** `POST http://localhost:8002/ingestion/enqueue`
+
+* **Consultar estado:** `GET http://localhost:8002/ingestion/jobs/{job_id}`
+
+* **Listar errores:** `GET http://localhost:8002/ingestion/failed`
+
+### Método 2: Ingesta Directa vía CLI
+
+Puedes ejecutar manualmente el script de optimización desde la raíz del proyecto sin pasar por la cola de Redis:
+
+```
+python services/retrieval-python/scripts/process_manual_opt.py \
+  --fast-ocr \
+  --workers 2 \
+  --memory-mode disk
+
 ```
 
-Para detener el sistema:
+Para procesar un PDF o colección específica:
 
-```bash
-docker compose down
+```
+python services/retrieval-python/scripts/process_manual_opt.py \
+  --pdf data/documents/new/manuales_tecnicos/manual-01.pdf \
+  --collection manuales_tecnicos
+
 ```
 
-Para detenerlo y eliminar los volúmenes:
+## 🔌 Uso de la API HTTP
 
-```bash
-docker compose down -v
+### 1. Autenticación (`POST /api/v1/auth/login`)
+
+Obtención del token Bearer necesario para operar los endpoints protegidos:
+
+```
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<tu_password>"}'
+
 ```
 
-> El primer arranque puede tardar debido a la descarga del modelo de embeddings y del modelo de lenguaje.
+### 2. Consulta estándar (`POST /api/v1/query`)
 
----
-
-## 🔌 API
-
-### `GET /health`
-
-Comprueba si el API Gateway está disponible.
-
-Respuesta:
-
-```json
-{
-  "status": "UP"
-}
 ```
-
-### `POST /api/v1/query`
-
-Realiza una consulta autenticada sobre los manuales indexados. Requiere un token de acceso en la cabecera `Authorization`.
-
-Petición:
-
-```json
-{
-  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
-}
-```
-
-Respuesta:
-
-```json
-{
-  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
-  "answer": "El mantenimiento requiere revisar los niveles de aceite...",
-  "context": [
-    {
-      "text": "Fragmento relevante recuperado del manual.",
-      "score": 0.89,
-      "metadata": {}
-    }
-  ]
-}
-```
-
-Ejemplo utilizando `curl`:
-
-```bash
 curl -X POST http://localhost:8080/api/v1/query \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"
   }'
+
 ```
 
-> Si el puerto configurado en `docker-compose.yml` es diferente, reemplaza `8080` por el puerto correspondiente.
+### 3. Consulta en tiempo real (`POST /api/v1/query/stream`)
 
-### `POST /api/v1/query/stream`
+Transmite la respuesta del LLM mediante **Server-Sent Events (SSE)** token por token:
 
-Misma consulta que `/api/v1/query`, pero la respuesta de Ollama se transmite en tiempo real mediante **Server-Sent Events** (`metadata` → `token`* → `complete`/`error`), sin que el Gateway reconstruya la respuesta completa. Requiere el mismo `Bearer <access_token>`. Detalle completo, diagrama de secuencia y ejemplos en [`services/gateway-go/README.md`](services/gateway-go/README.md#post-querystream--streaming-en-tiempo-real-sse).
-
-```bash
+```
 curl -N --no-buffer -X POST http://localhost:8080/api/v1/query/stream \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?"}'
+
 ```
 
-### Autenticación
+## 🤖 Integración con Agentes vía MCP (Model Context Protocol)
 
-Obtén un par de tokens con las credenciales configuradas para el usuario administrador:
+El motor expone un servidor MCP en el puerto `8001` (`http://localhost:8001/mcp`) documentado en `.vscode/mcp.json`.
 
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"<password>"}'
-```
+Herramientas (`tools`) disponibles para clientes y agentes compatibles:
 
-Renueva el acceso cuando expire el token:
+* `search_manual(query, top_k, collection, document_id, chapter, section)`: Búsqueda flexible en una colección explícita.
 
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token":"<refresh_token>"}'
-```
+* `search_technical_manuals(query, top_k, document_id, chapter, section)`: Búsqueda orientada al dominio de manuales técnicos.
 
-Los endpoints `/health`, `/ready` y `/metrics` son públicos. La consulta requiere `Bearer <access_token>`.
+## 🌐 Tabla de Puertos y Servicios
 
----
+| **Servicio** | **Puerto Local** | **Función** | 
+| **API Gateway** (`api-go`) | `8080` | Punto de entrada único para peticiones HTTP/REST. | 
+| **RAG Engine** (`rag-engine`) | `8000` | Servicio interno Python de inferencia y vectorizado. | 
+| **MCP Server** | `8001` | Servidor MCP para integración con agentes IA. | 
+| **Ingestion API** | `8002` | API para encolar y gestionar trabajos de ingesta. | 
+| **Frontend Web** | `5173` | UI del usuario (React + Vite). | 
+| **Qdrant** | `6333` / `6334` | Base vectorial (HTTP / gRPC). | 
+| **MinIO** | `9000` / `9001` | Object Storage (API / Console). | 
+| **Grafana** | `3000` | Visualización de métricas y dashboards. | 
+| **Prometheus** | `9090` | Monitorización y recolección de métricas. | 
+| **Loki** | `3100` | Recolección centralizada de logs. | 
+| **Tempo** | `3200` | Trazado distribuido (OTLP `4317`/`4318`). | 
+| **Ollama** *(Host)* | `11434` | Inferencia LLM ejecutada localmente en la máquina host. | 
 
-## 🧠 Motor de embeddings
+## 📈 Observabilidad y Diagnóstico
 
-El motor RAG utiliza `SentenceTransformer` y el modelo:
+El sistema cuenta con un pipeline completo de telemetría:
 
-```text
-BAAI/bge-m3
-```
+* Health Checks públicos en `/health` y `/ready`.
 
-Este modelo transforma el texto en vectores numéricos que permiten realizar búsquedas semánticas.
+* Métricas expuestas en `/metrics` en formato Prometheus.
 
-La implementación se encuentra en:
+* Logs estructurados en formato JSON.
 
-```text
-services/retrieval-python/src/manual_rag/adapters/bge_embedding_adapter.py
-```
+* Trazas distribuidas propagadas vía headers W3C (`traceparent`).
 
-El modelo se carga una sola vez cuando se inicia el servicio para evitar volver a descargarlo o inicializarlo en cada consulta.
+Para acceder a los paneles de monitoreo:
 
----
+* **Grafana**: `http://localhost:3000` (incluye dashboards preconfigurados en `deploy/observability/grafana/dashboards/`).
 
-## 📦 Indexación de documentos
+* **Prometheus**: `http://localhost:9090`.
 
-Antes de realizar consultas, los manuales deben ser procesados e indexados.
+### Solución de problemas comunes
 
-El proceso general es:
+* **Contenedores no arrancan o fallan al conectar:** Revisa logs específicos con `docker compose logs -f <nombre_servicio>`.
 
-```text
-Documento PDF
-   │
-   ▼
-Extracción de texto u OCR
-   │
-   ▼
-División en fragmentos
-   │
-   ▼
-Generación de embeddings
-   │
-   ▼
-Almacenamiento en Qdrant
-```
+* **Lentitud en primera consulta:** Ocurre mientras se descarga o inicializa en memoria el modelo de embedding `BAAI/bge-m3`.
 
-### Ingestion asíncrona
+* **Ollama no responde / Connection Refused:** Verifica que Ollama esté corriendo en la máquina host y responda a `curl http://localhost:11434/api/tags`.
 
-El Compose base incluye `redis`, `minio`, `ingestion-api` y `ingestion-worker`. La API se publica localmente en `http://localhost:8002` y permite encolar trabajos con `POST /ingestion/enqueue`, consultar `GET /ingestion/jobs` o `GET /ingestion/jobs/{job_id}`, y listar fallos con `GET /ingestion/failed`. Los trabajos usan Redis DB 2 (`INGESTION_REDIS_URL`) y el gateway mantiene sus sesiones en Redis DB 0; no mezcles ambos usos.
+* **Qdrant no devuelve contexto:** Asegúrate de que los documentos se hayan movido a la carpeta `completed/` y que la búsqueda apunte a la colección correcta (`generic_manuals` o `manuales_tecnicos`).
 
-El worker conserva el pipeline de scripts y aplica reintentos y timeouts configurables mediante `INGESTION_MAX_RETRIES`, `INGESTION_JOB_TIMEOUT_SECONDS` e `INGESTION_PIPELINE_TIMEOUT_SECONDS`. MinIO se configura con `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD`. La entrada local compatible usa `data/documents/new` mediante `local_path` dentro de `INGESTION_LOCAL_ROOT`.
+## 🛣️ Roadmap y Próximas Mejoras
 
-Este flujo y el procesamiento directo con `process_manual_opt.py` son caminos distintos que actualmente coexisten; el comando directo descrito abajo no pasa por Redis ni por la API de ingestion.
+* \[x\] Soporte multi-colección y streaming SSE.
 
-Los scripts relacionados con este proceso se encuentran en:
+* \[x\] Pipeline asíncrono de ingesta con Redis y MinIO.
 
-```text
-services/retrieval-python/scripts/
-```
+* \[x\] Integración de servidor MCP.
 
-La ingesta usa estas carpetas:
+* \[ \] Panel de administración UI para gestión de usuarios, historial de consultas y reindexación (ver [docs/roadmap/07-ui-consulta-admin.md](docs/roadmap/07-ui-consulta-admin.md)).
 
-```text
-data/documents/
-├── new/        # PDFs pendientes
-├── reading/    # PDF en procesamiento
-└── completed/  # PDFs procesados correctamente
-```
+* \[ \] Ampliación de pruebas de integración End-to-End en CI/CD (ver [docs/roadmap/08-tests-integracion.md](docs/roadmap/08-tests-integracion.md)).
 
-Para manuales divididos en varias partes, usa el mismo identificador y numera cada PDF:
+* \[ \] Caching de embedding para consultas frecuentes (ver [docs/roadmap/11-cache-reindexacion.md](docs/roadmap/11-cache-reindexacion.md)).
 
-```text
-data/documents/new/manual-reparaciones-valiant__parte-001.pdf
-data/documents/new/manual-reparaciones-valiant__parte-002.pdf
-```
+## 📄 Licencia y Créditos
 
-Ejecuta el orquestador oficial desde la raíz del proyecto:
+Desarrollado por [@javieralone](https://github.com/javieralone?utm_source=gemini).
 
-```powershell
-python services/retrieval-python/scripts/process_manual_opt.py `
-  --fast-ocr `
-  --workers 2 `
-  --memory-mode disk
-```
-
-`process_manual_opt.py` toma un PDF cada vez de `data/documents/new/<nombre_coleccion>`, lo mueve a `reading`, ejecuta OCR, indexación y carga en Qdrant, y lo mueve a `completed` solo si todas las etapas terminan correctamente. Si falla o se interrumpe, vuelve a `new` y registra el error en `logs/ingestion.log`.
-
-La ingesta sigue el patrón de carpetas `data/documents/new/<nombre_coleccion>/`, `data/documents/reading/<nombre_coleccion>/` y `data/documents/completed/<nombre_coleccion>/`. El nombre de la colección se deriva de la carpeta y se conserva durante todo el ciclo de vida del archivo.
-
-Ejemplo de estructura:
-
-```text
-data/documents/
-├── new/
-│   ├── manuales_tecnicos/
-│   │   ├── <nombre-manual>__parte-001.pdf
-│   │   └── <nombre-manual>__parte-002.pdf
-│   └── generic_manuals/
-│       └── <nombre-manual>__parte-001.pdf
-├── reading/
-│   ├── manuales_tecnicos/
-│   └── generic_manuals/
-└── completed/
-    ├── manuales_tecnicos/
-    └── generic_manuals/
-```
-
-El orquestador oficial es `process_manual_opt.py` y conserva los parámetros de OCR y rendimiento:
-
-```powershell
-python services/retrieval-python/scripts/process_manual_opt.py `
-  --fast-ocr `
-  --workers 2 `
-  --memory-mode disk
-```
-
-También puedes procesar un PDF concreto o forzar una colección:
-
-```powershell
-python services/retrieval-python/scripts/process_manual_opt.py --pdf data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf --collection manuales_tecnicos
-```
-
-Si la colección no se indica, se usa la inferida desde la carpeta `data/documents/new/<nombre_coleccion>/`. Cuando no hay carpeta compatible, el valor por defecto es `generic_manuals`.
-
-El OCR admite configuración adicional de salida, resolución y lenguaje:
-
-```bash
-python services/retrieval-python/scripts/ocr_manual_opt.py \
-  --pdf data/documents/new/manuales_tecnicos/<nombre-manual>__parte-001.pdf \
-  --output data/artifacts/manual_pages.json \
-  --collection manuales_tecnicos \
-  --dpi 200 \
-  --language spa
-```
-
-Cada página se convierte a escala de grises, se mejora el contraste y se limpia antes de ejecutar Tesseract. Si el texto preprocesado tiene peor calidad que el resultado directo, se conserva el resultado directo como fallback. La variable `TESSERACT_CMD` permite indicar explícitamente el binario cuando no está disponible en el `PATH`.
-
-Para medir el impacto sobre recuperación, ejecuta la evaluación antes y después de regenerar los chunks y subirlos a Qdrant:
-
-```bash
-cd rag-engine
-python scripts/evaluate_rag.py --skip-generation
-```
-
----
-
-## 🔎 Flujo de una consulta
-
-Cuando llega una pregunta al sistema:
-
-1. El usuario envía una petición al API Gateway.
-2. El Gateway valida la solicitud.
-3. La pregunta se envía al motor RAG.
-4. Se genera el embedding de la pregunta.
-5. Qdrant busca los fragmentos más similares.
-6. El contexto recuperado se envía al modelo de Ollama.
-7. Ollama genera la respuesta.
-8. El Gateway devuelve la respuesta junto con el contexto utilizado.
-
----
-
-## 🤖 Integración MCP
-
-El proyecto incluye un servidor MCP en:
-
-```text
-services/retrieval-python/src/manual_rag/entrypoints/mcp.py
-```
-
-La configuración para clientes compatibles se encuentra en:
-
-```text
-.vscode/mcp.json
-```
-
-Configuración actual:
-
-```json
-{
-  "servers": {
-    "manual-rag": {
-      "type": "http",
-      "url": "http://localhost:8001/mcp"
-    }
-  }
-}
-```
-
-Esto permite que agentes compatibles con MCP puedan consultar el sistema RAG mediante herramientas externas.
-
-El servidor expone actualmente estas tools:
-
-```text
-search_manual(query, top_k=3, collection="generic_manuals", document_id=None, chapter=None, section=None)
-search_technical_manuals(query, top_k=3, document_id=None, chapter=None, section=None)
-```
-
-`search_manual` permite consultar cualquier colección válida de forma explícita. `search_technical_manuals` fija la colección del dominio técnico mediante `MCP_DOMAIN_COLLECTIONS`. Las consultas vacías y los valores de `top_k` fuera del rango `1..20` se rechazan.
-
-Para probarlo desde Copilot Chat, activa el servidor `manual-rag` y solicita, por ejemplo:
-
-```text
-Usa search_technical_manuals para buscar el procedimiento de mantenimiento del sistema de lubricación.
-```
-
----
-
-## 🧪 Desarrollo local
-
-### Ejecutar el motor Python
-
-Crea y activa un entorno virtual:
-
-```bash
-cd services/retrieval-python
-
-python -m venv .venv
-```
-
-En Linux o macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-En Windows:
-
-```powershell
-.venv\Scripts\activate
-```
-
-Instala las dependencias:
-
-```bash
-pip install -r requirements.txt
-```
-
-Inicia el servicio FastAPI:
-
-```bash
-PYTHONPATH=src uvicorn manual_rag.entrypoints.http:app --host 0.0.0.0 --port 8000 --reload
-```
-
-El servidor MCP se inicia por separado en el puerto `8001`:
-
-```bash
-PYTHONPATH=src python -m manual_rag.entrypoints.mcp
-```
-
-La validación final de arquitectura está documentada en [docs/architecture/final-validation.md](docs/architecture/final-validation.md). La puesta en producción requiere además cerrar el checklist de [docs/operations/production-readiness.md](docs/operations/production-readiness.md).
-
-### Ejecutar el API Gateway en Go
-
-```bash
-cd services/gateway-go
-go mod tidy
-go build -v ./...
-go run ./cmd/api
-```
-
-Para ejecutar las pruebas:
-
-```bash
-go test ./...
-```
-
----
-
-## 🗂️ Servicios principales
-
-| Servicio | Responsabilidad | Descripción / Función |
-| :--- | :--- | :--- |
-| `api-go` | API Gateway y punto de entrada público | Gestiona peticiones HTTP, valida solicitudes, aplica control de concurrencia y orquesta la comunicación con el motor RAG. |
-| `rag-engine` | Recuperación semántica y API interna | Genera embeddings de preguntas con `bge-m3`, realiza búsquedas vectoriales y construye el contexto para el LLM. |
-| `qdrant` | Base de datos vectorial | Almacena los vectores semánticos de los manuales y ejecuta búsquedas de similitud en tiempo real. |
-| `mcp-server` | Servidor MCP para agentes | Expone las herramientas y capacidades del sistema RAG para integrarse con clientes y agentes compatibles con MCP. |
-| Ollama (externo) | Generación de respuestas mediante un LLM | Debe ejecutarse en el equipo host; `api-go` lo alcanza mediante `host.docker.internal:11434`. No es un servicio definido en Docker Compose. |
-| `prometheus` | Recolector de métricas | Mide en tiempo real la latencia, tráfico, tasa de errores y disponibilidad de los componentes de la aplicación. |
-| `grafana` | Visualización y paneles | Dashboard unificado que muestra gráficas de rendimiento, alertas activas y logs de la infraestructura. |
-| `loki` | Almacenamiento y gestión de logs | Agrupa y centraliza los registros de texto emitidos por las aplicaciones para diagnosticar fallos y errores. |
-| `tempo` | Tracing / Rastreo distribuido | Mide el tiempo de ejecución exacto y el recorrido de las peticiones entre los distintos microservicios. |
-
----
-
-## 🔐 Variables de configuración
-
-La configuración puede variar según el entorno. Docker Compose utiliza estas variables principales:
-
-```env
-PYTHON_ENGINE_URL=http://rag-engine:8000
-OLLAMA_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen2.5:1.5b
-AUTH_JWT_SECRET=<secreto>
-AUTH_REFRESH_SECRET=<secreto>
-AUTH_ADMIN_USERNAME=admin
-AUTH_ADMIN_PASSWORD_HASH=<hash-bcrypt>
-WORKER_LIMIT=2
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_REQUESTS=60
-RATE_LIMIT_WINDOW=1m
-HTTP_CLIENT_TIMEOUT=5m
-REQUEST_TIMEOUT=5m
-```
-
-El motor RAG usa `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, el valor por defecto `generic_manuals` para la colección y el modelo de embeddings `BAAI/bge-m3`. La colección puede seleccionarse explícitamente desde la API, MCP o la ingesta, y `manuales_tecnicos` sigue funcionando como una colección independiente y compatible. Ollama no es un servicio de Compose: debe estar disponible en el equipo host mediante `host.docker.internal:11434`.
-
-El servidor MCP usa `MCP_PORT=8001` y el mapa `MCP_DOMAIN_COLLECTIONS` para asociar tools de dominio con colecciones Qdrant. El mapa debe incluir la clave `technical_manuals`; en el Compose actual apunta a `manuales_tecnicos`.
-
-No incluyas claves privadas, tokens ni credenciales directamente en el repositorio. Las variables `AUTH_JWT_SECRET`, `AUTH_REFRESH_SECRET`, `AUTH_ADMIN_USERNAME` y `AUTH_ADMIN_PASSWORD_HASH` son obligatorias al iniciar `api-go`.
-
-Para desarrollo local copia `.env.example` a `.env.local`, completa los secretos y usa ese archivo explícitamente con Docker Compose:
-
-```powershell
-Copy-Item .env.example .env.local
-docker compose --env-file .env.local up -d --build
-```
-
-`.env.example` es apto para versionar; `.env.local` y `.env` están ignorados porque pueden contener secretos. Si ya usas `.env`, puedes continuar con `docker compose up`; para el archivo local separado debes indicar siempre `--env-file .env.local`.
-
-### Puertos
-
-| Servicio | Puerto local |
-|---|---:|
-| API Gateway | `8080` |
-| RAG Engine | `8000` |
-| MCP | `8001` |
-| API de ingestion | `8002` |
-| Frontend | `5173` |
-| Qdrant | `6333` (HTTP), `6334` (gRPC) |
-| MinIO | `9000` (API), `9001` (consola) |
-| Grafana | `3000` |
-| Prometheus | `9090` |
-| Loki | `3100` |
-| Tempo | `3200`, OTLP `4317`/`4318` |
-
----
-
-## 🩺 Solución de problemas
-
-### Los contenedores no arrancan
-
-Consulta los logs:
-
-```bash
-docker compose logs -f
-```
-
-También puedes reconstruir las imágenes:
-
-```bash
-docker compose down
-docker compose build --no-cache
-docker compose --env-file .env.local up -d
-```
-
-### El modelo de embeddings tarda en cargar
-
-La primera ejecución descarga el modelo `BAAI/bge-m3`. Este proceso puede tardar y requiere conexión a Internet.
-
-### Qdrant no encuentra resultados
-
-Comprueba que:
-
-- Los documentos hayan sido indexados.
-- La colección exista en Qdrant.
-- El modelo utilizado para indexar sea el mismo utilizado para consultar.
-- El tamaño de los vectores sea compatible.
-- El volumen de Qdrant esté correctamente montado.
-
-### Ollama no responde
-
-Comprueba que el servicio esté funcionando:
-
-```bash
-curl http://localhost:11434/api/tags
-```
-
-También verifica que el modelo requerido esté descargado:
-
-```bash
-ollama list
-```
-
----
-
-## 📁 Persistencia de datos
-
-Los siguientes directorios pueden contener datos generados por el sistema:
-
-```text
-data/documents/
-data/artifacts/
-data/local/qdrant/
-```
-
-El directorio `data/local/qdrant/` se monta directamente desde el host, por lo que conserva los vectores al reiniciar los contenedores. `docker compose down -v` elimina los volúmenes nombrados, pero no borra ese directorio; elimínalo manualmente solo si quieres reconstruir el índice.
-
----
-
-## 🛡️ Buenas prácticas
-
-- No subir documentos confidenciales al repositorio.
-- No incluir credenciales en archivos versionados.
-- Utilizar variables de entorno para la configuración.
-- Mantener separados los documentos originales y los datos procesados.
-- Limitar el número de consultas simultáneas.
-- Configurar timeouts para las llamadas entre servicios.
-- Monitorizar el consumo de memoria de los modelos.
-- Utilizar volúmenes persistentes para Qdrant.
-
----
-
-## 🛣️ Estado y próximas mejoras
-
-### Capacidades ya implementadas
-
-- Interfaz web React + Vite con login, selección de colección, chat y consulta normal o streaming.
-- Evaluación automática del RAG con métricas de precisión, recall, groundedness y latencia.
-- OCR optimizado para manuales escaneados, con control de resolución, idioma y uso de memoria.
-- Soporte multi-colección y multi-manual, con filtros por documento, capítulo y sección.
-- Servidor MCP con herramientas por dominio y selección explícita de colección.
-- Observabilidad base con métricas Prometheus, logs JSON, trazas OpenTelemetry, Grafana, Loki y Tempo.
-
-### Pendientes
-
-- Añadir un [panel administrativo operativo](docs/roadmap/07-ui-consulta-admin.md) para historial de consultas, contexto recuperado, métricas y gestión avanzada de usuarios y permisos.
-- Añadir una [cola de trabajos](docs/roadmap/06-cola-indexacion.md) para indexación asíncrona y procesamiento por lotes.
-- Extender las [pruebas de integración](docs/roadmap/08-tests-integracion.md) con Docker Compose para validar el flujo completo entre gateway, RAG, Qdrant y Ollama.
-- Mejorar los [dashboards operativos](docs/roadmap/10-dashboards-operativos.md) con vistas específicas de recuperación, tiempo hasta el primer token y latencia de Ollama.
-- Explorar estrategias de [caché y reindexación incremental](docs/roadmap/11-cache-reindexacion.md) para reducir tiempos de respuesta y carga.
-
----
-
-## 📈 Observabilidad
-
-La revisión de preparación productiva y su checklist están en [docs/operations/production-readiness.md](docs/operations/production-readiness.md).
-
-El sistema incluye observabilidad end-to-end:
-
-- `/health`, `/ready` y `/metrics` en `api-go` y `rag-engine`.
-- Métricas Prometheus de tráfico, latencias, errores, autenticación, concurrencia, retrieval, embeddings, Qdrant y Ollama.
-- Logs JSON en Go y Python.
-- Promtail recoge los logs Docker y los envía a Loki con labels estables (`service`, `container`, `project`, `environment`, `level`).
-- Trazas OpenTelemetry OTLP con destino Tempo y propagación W3C entre gateway, RAG engine y Ollama.
-- Stack Docker Compose con Prometheus, Grafana, Loki y Tempo.
-- Dashboard provisionado en `deploy/observability/grafana/dashboards/`.
-- Alertas base en `deploy/observability/prometheus/alerts.yml` para disponibilidad, latencia, errores, Ollama y Qdrant.
-
-URLs locales:
-
-| Servicio | URL |
-|---|---|
-| Prometheus | `http://localhost:9090` |
-| Grafana | `http://localhost:3000` |
-| Loki | `http://localhost:3100` |
-| Tempo | `http://localhost:3200` |
-
-Para levantar todo:
-
-```bash
-docker compose up -d --build
-```
-
----
-
-## 📄 Licencia
-
-Este proyecto se distribuye bajo la licencia definida en el repositorio.
-
-Si no existe una licencia específica, todos los derechos quedan reservados por el autor.
-
----
-
-## 👤 Autor
-
-Desarrollado por [@javieralone](https://github.com/javieralone).
-
-Repositorio:
-
-[https://github.com/javieralone/Manual-RAG](https://github.com/javieralone/Manual-RAG)
-````
+Repositorio Oficial: [https://github.com/javieralone/Manual-RAG](https://github.com/javieralone/Manual-RAG?utm_source=gemini)
