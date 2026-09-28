@@ -1,93 +1,122 @@
 # Frontend Manual-RAG
 
-Interfaz web para **Manual-RAG**, desarrollada con **React + Vite** y servida con **Nginx** en producción[cite: 1]. Permite interactuar con el sistema de consulta RAG mediante una interfaz de chat interactiva[cite: 1].
+## Descripción General
+
+La interfaz web del proyecto está implementada con **React + Vite** y actúa como la interfaz de usuario (MVP) para interactuar con el backend RAG. Ofrece un flujo completo de consulta y visualización de contextos recuperados mediante autenticación real.
+
+### Funcionalidades del MVP
+- **Autenticación real:** Inicio de sesión e integración contra el gateway Go (`api-go`).
+- **Consultas flexibles:** Selector de colecciones a consultar y alternancia entre respuesta normal o streaming en tiempo real.
+- **Interfaz interactiva:** Chat simple para consultas y panel lateral dedicado a la inspección del contexto RAG recuperado.
+- **Procesamiento SSE:** Renderizado incremental de respuestas por streaming con control frontend para evitar solapamientos de tokens.
+
+> **Nota de alcance:** Esta versión MVP no incluye aún historial persistente de conversaciones ni panel de administración avanzado.
 
 ---
 
-## 🚀 Funcionalidades
+## Requisitos Previos
 
-- **Autenticación real:** Inicio de sesión contra la API Gateway Go (`api-go`)[cite: 1].
-- **Chat interactivo:** Envío de preguntas sobre los manuales indexados[cite: 1].
-- **Soporte Streaming (SSE):** Elección entre respuesta estándar o transmisión token por token en tiempo real[cite: 1].
-- **Selector de colección:** Permite seleccionar la base de conocimiento/colección a consultar en Qdrant[cite: 1].
-- **Panel de contexto:** Visualización detallada del contenido y metadatos recuperados por el RAG para construir la respuesta[cite: 1].
+- **Node.js y npm** (para ejecuciones locales)
+- **Docker y Docker Compose** (para entornos en contenedores)
+- Acceso al servicio `api-go` ejecutándose en `http://localhost:8080`
+- Credenciales válidas (usuario y contraseña) configuradas en el gateway
 
 ---
 
-## 🏗️ Estructura del proyecto
+## Estructura del Proyecto
 
 ```text
 apps/web/
 ├── src/
-│   ├── api/          # Clientes HTTP y conexión con la API (auth, chat)
+│   ├── api/
 │   │   ├── auth.js
 │   │   ├── chat.js
 │   │   └── client.js
-│   ├── App.jsx       # Componente principal de la interfaz
-│   ├── index.css     # Estilos globales
-│   └── main.jsx      # Punto de entrada de React
-├── Dockerfile        # Build multi-stage (Vite + Nginx)
-├── nginx.conf        # Configuración de Nginx para producción
+│   ├── App.jsx
+│   ├── index.css
+│   └── main.jsx
+├── Dockerfile
+├── nginx.conf
 ├── package.json
 ├── vite.config.js
-└── .env.example
-```[cite: 1]
+├── .env.example
+├── .dockerignore
+├── index.html
+└── README.md
+```
 
 ---
 
-## ⚙️ Configuración y requisitos
+## Configuración y Variables de Entorno
 
-### Requisitos previos
-- Node.js (v18+) o Docker[cite: 1]
-- Servicio `api-go` ejecutándose (por defecto en `http://localhost:8080`)[cite: 1]
-
-### Variables de entorno
-Crea un archivo `.env` basado en `.env.example`[cite: 1]:
+El proyecto utiliza variables de entorno para configurar la URL del gateway. Consulta `.env.example` para la referencia de variables.
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080
-```[cite: 1]
+```
 
 ---
 
-## 🛠️ Ejecución
+## Guía de Ejecución
 
-### Desarrollo local (Node.js)
-
+### 1. Desarrollo Local
 ```bash
 cd apps/web
 npm install
 npm run dev
-```[cite: 1]
+```
+La aplicación quedará disponible en `http://localhost:5173`.
 
-Accede desde el navegador a: `http://localhost:5173`[cite: 1]
-
-### Despliegue con Docker Compose
-
-Para ejecutar el frontend containerizado junto al stack:
+### 2. Despliegue con Docker Compose
+Desde la raíz del proyecto y habiendo preparado el archivo `.env`:
 
 ```bash
 docker compose --env-file .env up -d --build frontend
-```[cite: 1]
+```
+El contenedor compila la aplicación mediante Vite y sirve los estáticos optimizados a través de **Nginx** en el puerto interno `8080`, publicado hacia el exterior en `http://localhost:5173`.
 
-La imagen compila los estáticos con Vite y los sirve con Nginx en el puerto público `5173`[cite: 1].
-
----
-
-## 🔌 Endpoints consumidos
-
-El frontend interactúa con los siguientes endpoints del Gateway:
-
-| Endpoint | Método | Descripción |
-| :--- | :---: | :--- |
-| `/api/v1/auth/login` | `POST` | Autenticación de usuario y obtención de token JWT[cite: 1]. |
-| `/api/v1/query` | `POST` | Consulta RAG estándar (espera la respuesta completa)[cite: 1]. |
-| `/api/v1/query/stream` | `POST` | Consulta RAG con **Server-Sent Events (SSE)** para streaming incremental[cite: 1]. |
-
-> **Nota sobre el Streaming:** Los eventos SSE son procesados en el cliente para renderizar la respuesta de forma progresiva. El frontend gestiona la deduplicación de tokens para evitar palabras repetidas durante el renderizado en tiempo real[cite: 1].
+> ⚠️ **Consideración de Seguridad para Producción:**
+> El MVP actual almacena los tokens JWT en el almacenamiento del navegador. Antes de pasar a producción, se debe migrar el *refresh token* a una cookie con atributos `HttpOnly`, `Secure` y `SameSite`, tal como se documenta en [production-readiness.md](../../docs/operations/production-readiness.md).
 
 ---
 
-## 🔒 Consideraciones de seguridad
+## Integración de API
 
-⚠️ **Aviso de seguridad para producción:** En la versión actual los tokens se almacenan en la memoria local del navegador[cite: 1]. Antes de desplegar en entornos de producción expuestos a Internet, se debe migrar la gestión del *refresh token* a cookies `HttpOnly`, `Secure` y `SameSite` (consulta la guía [production-readiness.md](../../docs/operations/production-readiness.md))[cite: 1].
+El frontend interactúa con los siguientes endpoints expuestos por el gateway:
+
+### Autenticación (`POST /api/v1/auth/login`)
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "tu-password"
+}
+```
+
+### Consulta Normal (`POST /api/v1/query`)
+```http
+POST /api/v1/query
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
+  "collection": "manuales_tecnicos"
+}
+```
+
+### Consulta con Streaming (`POST /api/v1/query/stream`)
+```http
+POST /api/v1/query/stream
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "question": "¿Cómo se realiza del mantenimiento del sistema de lubricación?",
+  "collection": "manuales_tecnicos"
+}
+```
+
+*Nota técnica sobre streaming:* Las respuestas en tiempo real se consumen mediante **Server-Sent Events (SSE)** del gateway. El frontend procesa estos eventos en tiempo real e implementa una lógica de desduplicación para prevenir la repetición o el solapamiento visual de tokens durante el renderizado.
