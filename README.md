@@ -68,17 +68,16 @@ El sistema busca semánticamente los fragmentos más relevantes y los utiliza co
 
 ### Componentes y Responsabilidades
 
-| 
-
-| **Componente** | **Descripción / Rol** | 
-| `api-go` | Gateway HTTP público, autenticación JWT, rate limiting, control de concurrencia y orquestación de solicitudes. | 
-| `rag-engine` | Servicio Python con Clean Architecture encargado de la generación de embeddings (`BAAI/bge-m3`) y recuperación semántica en Qdrant. | 
-| `apps/web` | Interfaz de usuario en React + Vite para login, selección de colecciones y chat (soporta respuestas estándar y SSE streaming). | 
-| `mcp-server` | Servidor compatible con Model Context Protocol (MCP) para exponer herramientas de consulta a agentes externos (ej. Copilot Chat). | 
-| `ingestion-api` / `worker` | Pipeline asíncrono basado en Redis DB 2 y MinIO para procesar, aplicar OCR e indexar documentos pesados. | 
-| `qdrant` | Base de datos vectorial para búsqueda por similitud de coseno/distancia. | 
-| `ollama` (externo) | Ejecutor local del modelo de lenguaje (ej. `qwen2.5:1.5b`), accesible vía host. | 
-| **Observabilidad** | `prometheus` (métricas), `grafana` (paneles), `loki`/`promtail` (logs centralizados) y `tempo` (trazado distribuido OTLP). | 
+| Componente | Descripción / Rol |
+| --- | --- |
+| `api-go` | Gateway HTTP público, autenticación JWT, rate limiting, control de concurrencia y orquestación de solicitudes. |
+| `rag-engine` | Servicio Python con Clean Architecture encargado de la generación de embeddings (`BAAI/bge-m3`) y recuperación semántica en Qdrant. |
+| `apps/web` | Interfaz de usuario en React + Vite para login, selección de colecciones y chat (soporta respuestas estándar y SSE streaming). |
+| `mcp-server` | Servidor compatible con Model Context Protocol (MCP) para exponer herramientas de consulta a agentes externos (ej. Copilot Chat). |
+| `ingestion-api` / `worker` | Pipeline asíncrono basado en Redis DB 2 y MinIO para procesar, aplicar OCR e indexar documentos pesados. |
+| `qdrant` | Base de datos vectorial para búsqueda por similitud de coseno/distancia. |
+| `ollama` (externo) | Ejecutor local del modelo de lenguaje (ej. `qwen2.5:1.5b`), accesible vía host. |
+| **Observabilidad** | `prometheus` (métricas), `grafana` (paneles), `loki`/`promtail` (logs centralizados) y `tempo` (trazado distribuido OTLP). |
 
 > **Nota de Arquitectura:** El backend está implementado bajo los principios de **Clean Architecture** (Arquitectura Hexagonal), separando el dominio y los casos de uso de la infraestructura mediante puertos y adaptadores.
 
@@ -250,19 +249,20 @@ Herramientas (`tools`) disponibles para clientes y agentes compatibles:
 
 ## 🌐 Tabla de Puertos y Servicios
 
-| **Servicio** | **Puerto Local** | **Función** | 
-| **API Gateway** (`api-go`) | `8080` | Punto de entrada único para peticiones HTTP/REST. | 
-| **RAG Engine** (`rag-engine`) | `8000` | Servicio interno Python de inferencia y vectorizado. | 
-| **MCP Server** | `8001` | Servidor MCP para integración con agentes IA. | 
-| **Ingestion API** | `8002` | API para encolar y gestionar trabajos de ingesta. | 
-| **Frontend Web** | `5173` | UI del usuario (React + Vite). | 
-| **Qdrant** | `6333` / `6334` | Base vectorial (HTTP / gRPC). | 
-| **MinIO** | `9000` / `9001` | Object Storage (API / Console). | 
-| **Grafana** | `3000` | Visualización de métricas y dashboards. | 
-| **Prometheus** | `9090` | Monitorización y recolección de métricas. | 
-| **Loki** | `3100` | Recolección centralizada de logs. | 
-| **Tempo** | `3200` | Trazado distribuido (OTLP `4317`/`4318`). | 
-| **Ollama** *(Host)* | `11434` | Inferencia LLM ejecutada localmente en la máquina host. | 
+| Servicio | Puerto Local | Función |
+| --- | --- | --- |
+| **API Gateway** (`api-go`) | `8080` | Punto de entrada único para peticiones HTTP/REST. |
+| **RAG Engine** (`rag-engine`) | `8000` | Servicio interno Python de inferencia y vectorizado. |
+| **MCP Server** | `8001` | Servidor MCP para integración con agentes IA. |
+| **Ingestion API** | `8002` | API para encolar y gestionar trabajos de ingesta. |
+| **Frontend Web** | `5173` | UI del usuario (React + Vite). |
+| **Qdrant** | `6333` / `6334` | Base vectorial (HTTP / gRPC). |
+| **MinIO** | `9000` / `9001` | Object Storage (API / Console). |
+| **Grafana** | `3000` | Visualización de métricas y dashboards. |
+| **Prometheus** | `9090` | Monitorización y recolección de métricas. |
+| **Loki** | `3100` | Recolección centralizada de logs. |
+| **Tempo** | `3200` | Trazado distribuido (OTLP `4317`/`4318`). |
+| **Ollama** *(Host)* | `11434` | Inferencia LLM ejecutada localmente en la máquina host. |
 
 ## 📈 Observabilidad y Diagnóstico
 
