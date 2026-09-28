@@ -1,138 +1,93 @@
 # Frontend Manual-RAG
 
-## Descripción
+Interfaz web para **Manual-RAG**, desarrollada con **React + Vite** y servida con **Nginx** en producción[cite: 1]. Permite interactuar con el sistema de consulta RAG mediante una interfaz de chat interactiva[cite: 1].
 
-La interfaz web del proyecto está implementada con React + Vite y está pensada como un MVP funcional para:
+---
 
-- iniciar sesión contra el gateway Go,
-- elegir la colección a consultar,
-- seleccionar modo normal o streaming,
-- enviar preguntas en un chat simple,
-- revisar el contexto recuperado por RAG.
+## 🚀 Funcionalidades
 
-## Objetivo del MVP
+- **Autenticación real:** Inicio de sesión contra la API Gateway Go (`api-go`)[cite: 1].
+- **Chat interactivo:** Envío de preguntas sobre los manuales indexados[cite: 1].
+- **Soporte Streaming (SSE):** Elección entre respuesta estándar o transmisión token por token en tiempo real[cite: 1].
+- **Selector de colección:** Permite seleccionar la base de conocimiento/colección a consultar en Qdrant[cite: 1].
+- **Panel de contexto:** Visualización detallada del contenido y metadatos recuperados por el RAG para construir la respuesta[cite: 1].
 
-Esta UI cubre el flujo mínimo útil de la feature 7:
+---
 
-- autenticación real con `api-go`,
-- consulta al sistema a través del gateway,
-- visualización de la respuesta y del contexto,
-- soporte para modo normal y modo streaming.
-
-No incluye aún historial persistente ni panel administrativo avanzado.
-
-## Requisitos
-
-- Docker y Docker Compose
-- Acceso al servicio `api-go` en `http://localhost:8080`
-- Usuario y password válidos configurados en el gateway
-
-## Estructura
+## 🏗️ Estructura del proyecto
 
 ```text
 apps/web/
 ├── src/
-│   ├── api/
+│   ├── api/          # Clientes HTTP y conexión con la API (auth, chat)
 │   │   ├── auth.js
 │   │   ├── chat.js
 │   │   └── client.js
-│   ├── App.jsx
-│   ├── index.css
-│   └── main.jsx
-├── Dockerfile
-├── nginx.conf
+│   ├── App.jsx       # Componente principal de la interfaz
+│   ├── index.css     # Estilos globales
+│   └── main.jsx      # Punto de entrada de React
+├── Dockerfile        # Build multi-stage (Vite + Nginx)
+├── nginx.conf        # Configuración de Nginx para producción
 ├── package.json
 ├── vite.config.js
-├── .env.example
-├── .dockerignore
-├── index.html
-└── README.md
-```
+└── .env.example
+```[cite: 1]
 
-## Variables de entorno
+---
 
-Se usa la variable:
+## ⚙️ Configuración y requisitos
+
+### Requisitos previos
+- Node.js (v18+) o Docker[cite: 1]
+- Servicio `api-go` ejecutándose (por defecto en `http://localhost:8080`)[cite: 1]
+
+### Variables de entorno
+Crea un archivo `.env` basado en `.env.example`[cite: 1]:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080
-```
+```[cite: 1]
 
-Contenido de ejemplo en `.env.example`.
+---
 
-## Ejecutar localmente
+## 🛠️ Ejecución
+
+### Desarrollo local (Node.js)
 
 ```bash
 cd apps/web
 npm install
 npm run dev
-```
+```[cite: 1]
 
-La app queda disponible normalmente en:
+Accede desde el navegador a: `http://localhost:5173`[cite: 1]
 
-```text
-http://localhost:5173
-```
+### Despliegue con Docker Compose
 
-## Ejecutar con Docker Compose
-
-Desde la raíz del proyecto, con un archivo `.env` configurado:
+Para ejecutar el frontend containerizado junto al stack:
 
 ```bash
 docker compose --env-file .env up -d --build frontend
-```
+```[cite: 1]
 
-La imagen de Compose compila Vite y sirve los archivos estáticos con Nginx en el puerto interno `8080`, publicado como `http://localhost:5173`.
+La imagen compila los estáticos con Vite y los sirve con Nginx en el puerto público `5173`[cite: 1].
 
-> El MVP actual conserva tokens en almacenamiento del navegador. Antes de exponerlo a Internet, migrar el refresh token a una cookie `HttpOnly`, `Secure` y `SameSite`, tal como se documenta en [production-readiness.md](../../docs/operations/production-readiness.md).
+---
 
-## API consumida
+## 🔌 Endpoints consumidos
 
-### Login
+El frontend interactúa con los siguientes endpoints del Gateway:
 
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
+| Endpoint | Método | Descripción |
+| :--- | :---: | :--- |
+| `/api/v1/auth/login` | `POST` | Autenticación de usuario y obtención de token JWT[cite: 1]. |
+| `/api/v1/query` | `POST` | Consulta RAG estándar (espera la respuesta completa)[cite: 1]. |
+| `/api/v1/query/stream` | `POST` | Consulta RAG con **Server-Sent Events (SSE)** para streaming incremental[cite: 1]. |
 
-{"username":"admin","password":"tu-password"}
-```
+> **Nota sobre el Streaming:** Los eventos SSE son procesados en el cliente para renderizar la respuesta de forma progresiva. El frontend gestiona la deduplicación de tokens para evitar palabras repetidas durante el renderizado en tiempo real[cite: 1].
 
-### Consulta normal
+---
 
-```http
-POST /api/v1/query
-Authorization: Bearer <token>
-Content-Type: application/json
+## 🔒 Consideraciones de seguridad
 
-{
-  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
-  "collection": "manuales_tecnicos"
-}
-```
-
-### Consulta streaming
-
-```http
-POST /api/v1/query/stream
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "question": "¿Cómo se realiza el mantenimiento del sistema de lubricación?",
-  "collection": "manuales_tecnicos"
-}
-```
-
-## Nota sobre streaming
-
-El stream usa eventos SSE del gateway. La UI los procesa y los convierte en respuesta incremental en el chat. La corrección de solapamiento de tokens se gestiona en el frontend para evitar duplicaciones como palabras repetidas durante la renderización incremental.
-
-## Estado actual
-
-El MVP ya incluye:
-
-- login funcional con autenticación real del gateway,
-- chat con respuesta incremental,
-- selector de colección,
-- selector de consulta sin stream / con stream,
-- panel lateral de contexto recuperado,
-- componente Docker listo para despliegue.
+⚠️ **Aviso de seguridad para producción:** En la versión actual los tokens se almacenan en la memoria local del navegador[cite: 1]. Antes de desplegar en entornos de producción expuestos a Internet, se debe migrar la gestión del *refresh token* a cookies `HttpOnly`, `Secure` y `SameSite` (consulta la guía [production-readiness.md](../../docs/operations/production-readiness.md))[cite: 1].
